@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large binaries and tools
+tools/
+*.exe
+
+# Streamlit secrets (if added in the future)
+.streamlit/secrets.toml
+
+# Environment & IDE
+.vscode/
+.idea/
+*.swp
