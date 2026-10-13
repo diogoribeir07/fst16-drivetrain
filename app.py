@@ -50,9 +50,12 @@ def render_image_input(label="Imagem (Print / Screenshot)", key="img_input", cur
     clipboard_key = f"clipboard_{key}"
     st.markdown(f"**{label}**")
 
-    col_btn, col_empty = st.columns([1.5, 3])
-    with col_btn:
-        if st.button("Colar do Clipboard", key=f"btn_paste_{key}", use_container_width=True):
+    pasted_img = st.session_state.get(clipboard_key, None)
+
+    col_paste, col_clear = st.columns([1, 1])
+    with col_paste:
+        btn_label = "Substituir do Clipboard" if (pasted_img is not None or current_image_path) else "Colar do Clipboard"
+        if st.button(btn_label, key=f"btn_paste_{key}", use_container_width=True):
             pasted = grab_image_from_clipboard()
             if pasted is not None:
                 st.session_state[clipboard_key] = pasted
@@ -60,19 +63,18 @@ def render_image_input(label="Imagem (Print / Screenshot)", key="img_input", cur
             else:
                 st.warning("Nenhuma imagem detetada no clipboard do sistema.")
 
-    pasted_img = st.session_state.get(clipboard_key, None)
-    if pasted_img is not None:
-        c_prev, c_clear = st.columns([2, 1])
-        with c_prev:
-            st.image(pasted_img, caption="Nova imagem a guardar", width=260)
-        with c_clear:
-            if st.button("Remover Imagem", key=f"btn_clear_{key}"):
+    with col_clear:
+        if pasted_img is not None:
+            if st.button("Remover Imagem Colada", key=f"btn_clear_{key}", use_container_width=True):
                 st.session_state.pop(clipboard_key, None)
                 st.rerun()
+
+    if pasted_img is not None:
+        st.image(pasted_img, caption="Nova imagem a guardar (Clica no canto para ver em ecrã inteiro)", use_container_width=True)
     elif current_image_path:
         real_img = resolve_image_path(current_image_path)
         if real_img:
-            st.image(real_img, caption="Imagem Atual", width=240)
+            st.image(real_img, caption="Imagem Atual (Clica no canto para ver em ecrã inteiro)", use_container_width=True)
 
     return pasted_img
 
@@ -469,6 +471,13 @@ div[data-testid="stSidebar"] button:has(p:contains('FST16 - Wheel Assembly')) {
 }
 div[data-testid="stSidebar"] button:has(p:contains('FST16 - Wheel Assembly')):hover {
     color: #ff4b4b !important;
+}
+div[data-testid="stFullScreenFrame"] img {
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
 }
 </style>
 """, unsafe_allow_html=True)
