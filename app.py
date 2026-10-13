@@ -3,7 +3,11 @@ import pandas as pd
 import os
 import json
 from datetime import datetime
-import plotly.express as px
+from PIL import Image
+try:
+    from PIL import ImageGrab
+except ImportError:
+    ImageGrab = None
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +31,67 @@ def resolve_image_path(path_str):
     if os.path.exists(clean_path):
         return clean_path
     return None
+
+def grab_image_from_clipboard():
+    if ImageGrab is None:
+        return None
+    try:
+        img = ImageGrab.grabclipboard()
+        if isinstance(img, Image.Image):
+            return img
+        elif isinstance(img, list) and len(img) > 0:
+            if os.path.exists(img[0]):
+                return Image.open(img[0])
+    except Exception:
+        pass
+    return None
+
+def render_image_input(label="Attach Image", key="img_input"):
+    clipboard_key = f"clipboard_{key}"
+    col_up, col_btn = st.columns([3, 1])
+    with col_up:
+        uploaded_file = st.file_uploader(
+            f"{label} (Arrastar & largar, ou clicar e premir Ctrl+V)",
+            type=["jpg", "png", "jpeg"],
+            key=f"uploader_{key}"
+        )
+    with col_btn:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("Colar do Clipboard", key=f"btn_paste_{key}", use_container_width=True):
+            pasted = grab_image_from_clipboard()
+            if pasted is not None:
+                st.session_state[clipboard_key] = pasted
+                st.toast("Imagem colada do clipboard com sucesso.")
+            else:
+                st.warning("Nenhuma imagem detetada no clipboard do sistema. No browser, clica na caixa de upload e prime Ctrl+V.")
+
+    pasted_img = st.session_state.get(clipboard_key, None)
+    if pasted_img is not None and uploaded_file is None:
+        c_prev, c_clear = st.columns([3, 1])
+        with c_prev:
+            st.image(pasted_img, caption="Imagem colada do clipboard", width=260)
+        with c_clear:
+            if st.button("Limpar Imagem Colada", key=f"btn_clear_{key}"):
+                st.session_state.pop(clipboard_key, None)
+                st.rerun()
+
+    return uploaded_file, pasted_img
+
+def save_uploaded_or_pasted_image(uploaded_file, pasted_image, part_name, version_str):
+    version_clean = str(version_str).lstrip('vV').replace('.', '_')
+    if uploaded_file is not None:
+        filename = f"{part_name}_v{version_clean}_{uploaded_file.name}"
+        filepath = os.path.join(IMAGE_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        return f"images/{filename}"
+    elif pasted_image is not None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{part_name}_v{version_clean}_clipboard_{timestamp}.png"
+        filepath = os.path.join(IMAGE_DIR, filename)
+        pasted_image.save(filepath, format="PNG")
+        return f"images/{filename}"
+    return ""
 
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -183,6 +248,94 @@ def style_comparison_dataframe(df_comp):
     styled = df_comp.style.map(
         highlight_delta,
         subset=[c for c in df_comp.columns if c in [delta_col, pct_col]]
+    ).format(format_dict)
+    return styled
+
+def build_mass_comparison_dataframe(eval_weight, ref_weight, curr_label="Current", ref_label="FST15"):
+    try:
+        e_w = float(eval_weight)
+    except:
+        e_w = 0.0
+    try:
+        r_w = float(ref_weight)
+    except:
+        r_w = 0.0
+
+    diff = e_w - r_w
+    if abs(diff) < 1e-4:
+        diff = 0.0
+        pct = 0.0
+    else:
+        pct = (diff / r_w * 100.0) if r_w != 0 else 0.0
+
+    curr_col = f"Weight ({curr_label}) (g)" if curr_label else "Weight (g)"
+    ref_col = f"Ref. ({ref_label}) (g)"
+
+    return pd.DataFrame([{
+        "Metric": "Total Weight",
+        curr_col: e_w,
+        ref_col: r_w,
+        "Δ (g)": diff,
+        "%": pct
+    }])
+
+def build_all_iterations_mass_dataframe(part_data, ref_weight, ref_label="FST15"):
+    try:
+        r_w = float(ref_weight)
+    except:
+        r_w = 0.0
+
+    ref_col = f"Ref. ({ref_label}) (g)"
+    rows = []
+    for _, r in part_data.sort_values("Date").iterrows():
+        try:
+            w = float(r["Weight (g)"])
+        except:
+            w = 0.0
+        diff = w - r_w
+        if abs(diff) < 1e-4:
+            diff = 0.0
+            pct = 0.0
+        else:
+            pct = (diff / r_w * 100.0) if r_w != 0 else 0.0
+
+        rows.append({
+            "Version": format_v_label(r["Version"]),
+            "Date": str(r["Date"]),
+            "Weight (g)": w,
+            ref_col: r_w,
+            "Δ (g)": diff,
+            "%": pct
+        })
+    return pd.DataFrame(rows)
+
+def style_mass_dataframe(df_mass):
+    def highlight_delta(val):
+        try:
+            v = float(val)
+            if v < -0.01:
+                return 'color: #33cc33; font-weight: 600;'
+            elif v > 0.01:
+                return 'color: #ff4b4b; font-weight: 600;'
+        except Exception:
+            pass
+        return ''
+
+    delta_col = "Δ (g)"
+    pct_col = "%"
+
+    format_dict = {}
+    for c in df_mass.columns:
+        if c == delta_col:
+            format_dict[c] = "{:+.2f}"
+        elif c == pct_col:
+            format_dict[c] = "{:+.1f}%"
+        elif "(g)" in c:
+            format_dict[c] = "{:.2f}"
+
+    styled = df_mass.style.map(
+        highlight_delta,
+        subset=[c for c in df_mass.columns if c in [delta_col, pct_col]]
     ).format(format_dict)
     return styled
 
@@ -659,7 +812,7 @@ elif st.session_state.current_page == "Part Management":
     if st.session_state.action == "create":
         st.title("Create New Part")
         
-        with st.form("new_part_form"):
+        with st.container():
             col1, col2 = st.columns(2)
             with col1:
                 part_number_input = st.text_input("Part ID (e.g., type '2' to create 'UP_02')")
@@ -674,9 +827,9 @@ elif st.session_state.current_page == "Part Management":
             edited_meas = st.data_editor(empty_df, num_rows="dynamic", use_container_width=True)
             
             desc = st.text_area("Initial Description")
-            image = st.file_uploader("Attach Image (Drag & Drop, or Click here & press Ctrl+V to paste a screenshot)", type=["jpg", "png", "jpeg"])
+            uploaded_img, pasted_img = render_image_input("Attach Image", key="new_part_img")
             
-            if st.form_submit_button("Save Part"):
+            if st.button("Save Part", type="primary", use_container_width=True, key="btn_save_new_part"):
                 version = str(version).lstrip('vV')
                 if part_number_input:
                     clean_input = str(part_number_input).strip()
@@ -685,12 +838,9 @@ elif st.session_state.current_page == "Part Management":
                     else:
                         final_part_name = clean_input
 
-                    img_path = ""
-                    if image:
-                        img_filename = f"{final_part_name}_v{version.replace('.','_')}_{image.name}"
-                        with open(os.path.join(IMAGE_DIR, img_filename), "wb") as f:
-                            f.write(image.getbuffer())
-                        img_path = f"images/{img_filename}"
+                    img_path = save_uploaded_or_pasted_image(uploaded_img, pasted_img, final_part_name, version)
+                    if img_path:
+                        st.session_state.pop("clipboard_new_part_img", None)
                     
                     new_stiffness = format_stiffness_data(DEFAULT_FST16_DISPLACEMENTS) if final_part_name == "UP_01" else ""
                     new_row = {
@@ -741,36 +891,32 @@ elif st.session_state.current_page == "Part Management":
                     st.dataframe(pd.DataFrame(meas_list), hide_index=True)
                 
                 if len(part_data) > 1:
-                    fig = px.line(part_data, x="Version", y="Weight (g)", markers=True, title="Weight Evolution")
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                if selected_part == "UP_01":
                     st.divider()
-                    st.markdown("### FEA Displacements")
+                    st.markdown("### Version Comparison")
 
-                    up_versions = []
+                    comp_versions = []
                     for v in part_data["Version"].astype(str).tolist():
-                        if v not in up_versions:
-                            up_versions.append(v)
+                        if v not in comp_versions:
+                            comp_versions.append(v)
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        default_ref_idx = up_versions.index("FST15") if "FST15" in up_versions else 0
+                        default_ref_idx = comp_versions.index("FST15") if "FST15" in comp_versions else 0
                         ref_v = st.selectbox(
                             "Baseline Iteration (Reference):",
-                            up_versions,
+                            comp_versions,
                             index=default_ref_idx,
                             format_func=format_v_label,
-                            key="up01_comp_ref"
+                            key=f"comp_ref_{selected_part}"
                         )
                     with col2:
-                        default_eval_idx = len(up_versions) - 1 if len(up_versions) > 1 else 0
+                        default_eval_idx = len(comp_versions) - 1 if len(comp_versions) > 1 else 0
                         eval_v = st.selectbox(
                             "Evaluate Iteration (Current):",
-                            up_versions,
+                            comp_versions,
                             index=default_eval_idx,
                             format_func=format_v_label,
-                            key="up01_comp_eval"
+                            key=f"comp_eval_{selected_part}"
                         )
 
                     ref_rows = part_data[part_data["Version"].astype(str) == str(ref_v)]
@@ -778,22 +924,38 @@ elif st.session_state.current_page == "Part Management":
                     eval_rows = part_data[part_data["Version"].astype(str) == str(eval_v)]
                     eval_row = eval_rows.iloc[-1] if not eval_rows.empty else latest_iter
 
-                    ref_stiff = parse_stiffness_data(ref_row.get("Stiffness Data", ""))
-                    if not ref_stiff and str(ref_v) == "FST15":
-                        ref_stiff = DEFAULT_FST15_DISPLACEMENTS
-
-                    eval_stiff = parse_stiffness_data(eval_row.get("Stiffness Data", ""))
-                    if not eval_stiff:
-                        if str(eval_v) == "FST15":
-                            eval_stiff = DEFAULT_FST15_DISPLACEMENTS
-                        else:
-                            eval_stiff = DEFAULT_FST16_DISPLACEMENTS
-
                     ref_label = format_v_label(ref_v)
                     eval_label = format_v_label(eval_v)
 
-                    df_view = build_comparison_dataframe(eval_stiff, ref_stiff, ref_label=ref_label, curr_label=eval_label)
-                    st.dataframe(style_comparison_dataframe(df_view), use_container_width=True, hide_index=True)
+                    st.markdown("#### Mass Difference")
+                    df_mass = build_mass_comparison_dataframe(
+                        eval_weight=eval_row['Weight (g)'],
+                        ref_weight=ref_row['Weight (g)'],
+                        curr_label=eval_label,
+                        ref_label=ref_label
+                    )
+                    st.dataframe(style_mass_dataframe(df_mass), use_container_width=True, hide_index=True)
+
+                    if len(comp_versions) > 2:
+                        with st.expander(f"All Iterations vs Baseline ({ref_label})", expanded=False):
+                            df_all_mass = build_all_iterations_mass_dataframe(part_data, ref_row['Weight (g)'], ref_label)
+                            st.dataframe(style_mass_dataframe(df_all_mass), use_container_width=True, hide_index=True)
+
+                    if selected_part == "UP_01":
+                        st.markdown("#### FEA Displacements")
+                        ref_stiff = parse_stiffness_data(ref_row.get("Stiffness Data", ""))
+                        if not ref_stiff and str(ref_v) == "FST15":
+                            ref_stiff = DEFAULT_FST15_DISPLACEMENTS
+
+                        eval_stiff = parse_stiffness_data(eval_row.get("Stiffness Data", ""))
+                        if not eval_stiff:
+                            if str(eval_v) == "FST15":
+                                eval_stiff = DEFAULT_FST15_DISPLACEMENTS
+                            else:
+                                eval_stiff = DEFAULT_FST16_DISPLACEMENTS
+
+                        df_view = build_comparison_dataframe(eval_stiff, ref_stiff, ref_label=ref_label, curr_label=eval_label)
+                        st.dataframe(style_comparison_dataframe(df_view), use_container_width=True, hide_index=True)
 
                 st.divider()
                 st.subheader("History")
@@ -853,7 +1015,7 @@ elif st.session_state.current_page == "Part Management":
                         weight = st.number_input("New Total Weight (g)", value=float(latest_iter['Weight (g)']), format="%.2f", key="up_new_wt")
                     with col2:
                         desc = st.text_area("What changed in this version?", key="up_new_desc")
-                        image = st.file_uploader("Attach Image (Drag & Drop, or Click here & press Ctrl+V to paste a screenshot)", type=["jpg", "png", "jpeg"], key="up_new_img")
+                        uploaded_img, pasted_img = render_image_input("Attach Image", key="up_new_img")
 
                     st.markdown("**Constraints (Inherited from previous version)**")
                     meas_df_nova = pd.DataFrame(parse_measurements(latest_iter['Constraints']))
@@ -906,12 +1068,9 @@ elif st.session_state.current_page == "Part Management":
 
                     if st.button("Save New Iteration", type="primary", use_container_width=True, key="save_up_new_btn"):
                         new_version = str(new_version).lstrip('vV')
-                        img_path = ""
-                        if image:
-                            img_filename = f"{selected_part}_v{new_version.replace('.','_')}_{image.name}"
-                            with open(os.path.join(IMAGE_DIR, img_filename), "wb") as f:
-                                f.write(image.getbuffer())
-                            img_path = f"images/{img_filename}"
+                        img_path = save_uploaded_or_pasted_image(uploaded_img, pasted_img, selected_part, new_version)
+                        if img_path:
+                            st.session_state.pop("clipboard_up_new_img", None)
 
                         final_meas = [r for r in edited_meas_nova.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                         new_row = {
@@ -934,7 +1093,7 @@ elif st.session_state.current_page == "Part Management":
                 else:
                     st.subheader("Create New Iteration")
                     
-                    with st.form("new_v_form"):
+                    with st.container():
                         current_v = str(latest_iter['Version'])
                         try:
                             if '.' in current_v:
@@ -946,27 +1105,23 @@ elif st.session_state.current_page == "Part Management":
                         except:
                             next_minor = f"{current_v}_new"
                         
-                        new_version = st.text_input("New Version ID", value=next_minor)
-                        weight = st.number_input("New Total Weight (g)", value=float(latest_iter['Weight (g)']), format="%.2f")
+                        new_version = st.text_input("New Version ID", value=next_minor, key="non_up_new_ver")
+                        weight = st.number_input("New Total Weight (g)", value=float(latest_iter['Weight (g)']), format="%.2f", key="non_up_new_wt")
                         
                         st.markdown("**Constraints (Inherited from previous version)**")
                         meas_df_nova = pd.DataFrame(parse_measurements(latest_iter['Constraints']))
                         if meas_df_nova.empty or "Property" not in meas_df_nova.columns:
                             meas_df_nova = pd.DataFrame([{"Property": "", "Value": ""}])
-                        edited_meas_nova = st.data_editor(meas_df_nova, num_rows="dynamic", use_container_width=True)
+                        edited_meas_nova = st.data_editor(meas_df_nova, num_rows="dynamic", use_container_width=True, key="non_up_new_meas")
                         
-                        desc = st.text_area("What changed in this version?")
-                        image = st.file_uploader("Attach Image (Drag & Drop, or Click here & press Ctrl+V to paste a screenshot)", type=["jpg", "png", "jpeg"], key="img_nova")
+                        desc = st.text_area("What changed in this version?", key="non_up_new_desc")
+                        uploaded_img, pasted_img = render_image_input("Attach Image", key="non_up_new_img")
                         
-                        if st.form_submit_button("Save New Iteration"):
+                        if st.button("Save New Iteration", type="primary", use_container_width=True, key="save_non_up_new_btn"):
                             new_version = str(new_version).lstrip('vV')
-                            
-                            img_path = ""
-                            if image:
-                                img_filename = f"{selected_part}_v{new_version.replace('.','_')}_{image.name}"
-                                with open(os.path.join(IMAGE_DIR, img_filename), "wb") as f:
-                                    f.write(image.getbuffer())
-                                img_path = f"images/{img_filename}"
+                            img_path = save_uploaded_or_pasted_image(uploaded_img, pasted_img, selected_part, new_version)
+                            if img_path:
+                                st.session_state.pop("clipboard_non_up_new_img", None)
                                     
                             final_meas = [r for r in edited_meas_nova.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                             
@@ -1001,7 +1156,7 @@ elif st.session_state.current_page == "Part Management":
                         edit_weight = st.number_input("Update Weight (g)", value=float(row_to_edit['Weight (g)']), format="%.2f", key="edit_up_wt")
                         edit_desc = st.text_area("Update Description", value=row_to_edit['Description'], key="edit_up_desc")
                     with col2:
-                        edit_image = st.file_uploader("Update Image (Drag & Drop, or Click here & press Ctrl+V to paste a screenshot)", type=["jpg", "png", "jpeg"], key="edit_up_img")
+                        uploaded_edit_img, pasted_edit_img = render_image_input("Update Image", key="edit_up_img")
 
                     st.markdown("**Update Constraints**")
                     meas_df_edit = pd.DataFrame(parse_measurements(row_to_edit['Constraints']))
@@ -1061,11 +1216,10 @@ elif st.session_state.current_page == "Part Management":
                         del_clicked = st.button("Delete Entire Part", use_container_width=True, key="del_up_part_btn")
 
                     if save_clicked:
-                        if edit_image:
-                            img_filename = f"{selected_part}_v{str(version_to_edit).replace('.','_')}_{edit_image.name}"
-                            with open(os.path.join(IMAGE_DIR, img_filename), "wb") as f:
-                                f.write(edit_image.getbuffer())
-                            df_parts.at[selected_idx, 'Image Path'] = f"images/{img_filename}"
+                        new_img_path = save_uploaded_or_pasted_image(uploaded_edit_img, pasted_edit_img, selected_part, version_to_edit)
+                        if new_img_path:
+                            df_parts.at[selected_idx, 'Image Path'] = new_img_path
+                            st.session_state.pop("clipboard_edit_up_img", None)
 
                         final_meas = [r for r in edited_meas_edit.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                         df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
@@ -1108,18 +1262,18 @@ elif st.session_state.current_page == "Part Management":
                     row_to_edit = part_data.loc[selected_idx]
                     version_to_edit = row_to_edit["Version"]
                     
-                    with st.form("edit_v_form"):
+                    with st.container():
                         st.caption(f"Editing data for v{version_to_edit}. Changes will overwrite this specific iteration.")
-                        edit_weight = st.number_input("Update Weight (g)", value=float(row_to_edit['Weight (g)']), format="%.2f")
+                        edit_weight = st.number_input("Update Weight (g)", value=float(row_to_edit['Weight (g)']), format="%.2f", key="edit_non_up_wt")
                         
                         st.markdown("**Update Constraints**")
                         meas_df_edit = pd.DataFrame(parse_measurements(row_to_edit['Constraints']))
                         if meas_df_edit.empty or "Property" not in meas_df_edit.columns:
                             meas_df_edit = pd.DataFrame([{"Property": "", "Value": ""}])
-                        edited_meas_edit = st.data_editor(meas_df_edit, num_rows="dynamic", use_container_width=True, key="de_edit")
+                        edited_meas_edit = st.data_editor(meas_df_edit, num_rows="dynamic", use_container_width=True, key="de_edit_non_up")
                         
-                        edit_desc = st.text_area("Update Description", value=row_to_edit['Description'])
-                        edit_image = st.file_uploader("Update Image (Drag & Drop, or Click here & press Ctrl+V to paste a screenshot)", type=["jpg", "png", "jpeg"], key="img_edit")
+                        edit_desc = st.text_area("Update Description", value=row_to_edit['Description'], key="edit_non_up_desc")
+                        uploaded_edit_img, pasted_edit_img = render_image_input("Update Image", key="edit_non_up_img")
                         
                         st.markdown("""
                         <style>
@@ -1138,18 +1292,17 @@ elif st.session_state.current_page == "Part Management":
                         
                         c_save, c_del_iter, c_del = st.columns([2, 2, 2])
                         with c_save:
-                            save_clicked = st.form_submit_button("Save Changes", use_container_width=True)
+                            save_clicked = st.button("Save Changes", type="primary", use_container_width=True, key="save_non_up_edit_btn")
                         with c_del_iter:
-                            del_iter_clicked = st.form_submit_button("Delete Iteration", use_container_width=True)
+                            del_iter_clicked = st.button("Delete Iteration", use_container_width=True, key="del_non_up_iter_btn")
                         with c_del:
-                            del_clicked = st.form_submit_button("Delete Entire Part", use_container_width=True)
+                            del_clicked = st.button("Delete Entire Part", use_container_width=True, key="del_non_up_part_btn")
                         
                         if save_clicked:
-                            if edit_image:
-                                img_filename = f"{selected_part}_v{version_to_edit.replace('.','_')}_{edit_image.name}"
-                                with open(os.path.join(IMAGE_DIR, img_filename), "wb") as f:
-                                    f.write(edit_image.getbuffer())
-                                df_parts.at[selected_idx, 'Image Path'] = f"images/{img_filename}"
+                            new_img_path = save_uploaded_or_pasted_image(uploaded_edit_img, pasted_edit_img, selected_part, version_to_edit)
+                            if new_img_path:
+                                df_parts.at[selected_idx, 'Image Path'] = new_img_path
+                                st.session_state.pop("clipboard_edit_non_up_img", None)
                                 
                             df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
                             df_parts.at[selected_idx, 'Description'] = edit_desc
