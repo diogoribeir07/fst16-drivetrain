@@ -46,52 +46,45 @@ def grab_image_from_clipboard():
         pass
     return None
 
-def render_image_input(label="Attach Image", key="img_input"):
+def render_image_input(label="Imagem (Print / Screenshot)", key="img_input", current_image_path=None):
     clipboard_key = f"clipboard_{key}"
-    col_up, col_btn = st.columns([3, 1])
-    with col_up:
-        uploaded_file = st.file_uploader(
-            f"{label} (Arrastar & largar, ou clicar e premir Ctrl+V)",
-            type=["jpg", "png", "jpeg"],
-            key=f"uploader_{key}"
-        )
+    st.markdown(f"**{label}**")
+
+    col_btn, col_empty = st.columns([1.5, 3])
     with col_btn:
-        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
         if st.button("Colar do Clipboard", key=f"btn_paste_{key}", use_container_width=True):
             pasted = grab_image_from_clipboard()
             if pasted is not None:
                 st.session_state[clipboard_key] = pasted
                 st.toast("Imagem colada do clipboard com sucesso.")
             else:
-                st.warning("Nenhuma imagem detetada no clipboard do sistema. No browser, clica na caixa de upload e prime Ctrl+V.")
+                st.warning("Nenhuma imagem detetada no clipboard do sistema.")
 
     pasted_img = st.session_state.get(clipboard_key, None)
-    if pasted_img is not None and uploaded_file is None:
-        c_prev, c_clear = st.columns([3, 1])
+    if pasted_img is not None:
+        c_prev, c_clear = st.columns([2, 1])
         with c_prev:
-            st.image(pasted_img, caption="Imagem colada do clipboard", width=260)
+            st.image(pasted_img, caption="Nova imagem a guardar", width=260)
         with c_clear:
-            if st.button("Limpar Imagem Colada", key=f"btn_clear_{key}"):
+            if st.button("Remover Imagem", key=f"btn_clear_{key}"):
                 st.session_state.pop(clipboard_key, None)
                 st.rerun()
+    elif current_image_path:
+        real_img = resolve_image_path(current_image_path)
+        if real_img:
+            st.image(real_img, caption="Imagem Atual", width=240)
 
-    return uploaded_file, pasted_img
+    return pasted_img
 
-def save_uploaded_or_pasted_image(uploaded_file, pasted_image, part_name, version_str):
+def save_pasted_image(pasted_image, part_name, version_str):
+    if pasted_image is None:
+        return ""
     version_clean = str(version_str).lstrip('vV').replace('.', '_')
-    if uploaded_file is not None:
-        filename = f"{part_name}_v{version_clean}_{uploaded_file.name}"
-        filepath = os.path.join(IMAGE_DIR, filename)
-        with open(filepath, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        return f"images/{filename}"
-    elif pasted_image is not None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{part_name}_v{version_clean}_clipboard_{timestamp}.png"
-        filepath = os.path.join(IMAGE_DIR, filename)
-        pasted_image.save(filepath, format="PNG")
-        return f"images/{filename}"
-    return ""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{part_name}_v{version_clean}_{timestamp}.png"
+    filepath = os.path.join(IMAGE_DIR, filename)
+    pasted_image.save(filepath, format="PNG")
+    return f"images/{filename}"
 
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -827,7 +820,7 @@ elif st.session_state.current_page == "Part Management":
             edited_meas = st.data_editor(empty_df, num_rows="dynamic", use_container_width=True)
             
             desc = st.text_area("Initial Description")
-            uploaded_img, pasted_img = render_image_input("Attach Image", key="new_part_img")
+            pasted_img = render_image_input("Imagem da Peça (Print / Screenshot)", key="new_part_img")
             
             if st.button("Save Part", type="primary", use_container_width=True, key="btn_save_new_part"):
                 version = str(version).lstrip('vV')
@@ -838,7 +831,7 @@ elif st.session_state.current_page == "Part Management":
                     else:
                         final_part_name = clean_input
 
-                    img_path = save_uploaded_or_pasted_image(uploaded_img, pasted_img, final_part_name, version)
+                    img_path = save_pasted_image(pasted_img, final_part_name, version)
                     if img_path:
                         st.session_state.pop("clipboard_new_part_img", None)
                     
@@ -884,11 +877,6 @@ elif st.session_state.current_page == "Part Management":
                 
                 weight_diff = latest_iter['Weight (g)'] - part_data.iloc[0]['Weight (g)']
                 col3.metric("Net Diff (vs Original)", f"{weight_diff:+.2f} g")
-                
-                meas_list = parse_measurements(latest_iter['Constraints'])
-                if meas_list:
-                    st.markdown("**Fixed Constraints:**")
-                    st.dataframe(pd.DataFrame(meas_list), hide_index=True)
                 
                 if len(part_data) > 1:
                     st.divider()
@@ -1015,7 +1003,7 @@ elif st.session_state.current_page == "Part Management":
                         weight = st.number_input("New Total Weight (g)", value=float(latest_iter['Weight (g)']), format="%.2f", key="up_new_wt")
                     with col2:
                         desc = st.text_area("What changed in this version?", key="up_new_desc")
-                        uploaded_img, pasted_img = render_image_input("Attach Image", key="up_new_img")
+                        pasted_img = render_image_input("Imagem da Nova Iteração (Print / Screenshot)", key="up_new_img")
 
                     st.markdown("**Constraints (Inherited from previous version)**")
                     meas_df_nova = pd.DataFrame(parse_measurements(latest_iter['Constraints']))
@@ -1068,7 +1056,7 @@ elif st.session_state.current_page == "Part Management":
 
                     if st.button("Save New Iteration", type="primary", use_container_width=True, key="save_up_new_btn"):
                         new_version = str(new_version).lstrip('vV')
-                        img_path = save_uploaded_or_pasted_image(uploaded_img, pasted_img, selected_part, new_version)
+                        img_path = save_pasted_image(pasted_img, selected_part, new_version)
                         if img_path:
                             st.session_state.pop("clipboard_up_new_img", None)
 
@@ -1115,11 +1103,11 @@ elif st.session_state.current_page == "Part Management":
                         edited_meas_nova = st.data_editor(meas_df_nova, num_rows="dynamic", use_container_width=True, key="non_up_new_meas")
                         
                         desc = st.text_area("What changed in this version?", key="non_up_new_desc")
-                        uploaded_img, pasted_img = render_image_input("Attach Image", key="non_up_new_img")
+                        pasted_img = render_image_input("Imagem da Nova Iteração (Print / Screenshot)", key="non_up_new_img")
                         
                         if st.button("Save New Iteration", type="primary", use_container_width=True, key="save_non_up_new_btn"):
                             new_version = str(new_version).lstrip('vV')
-                            img_path = save_uploaded_or_pasted_image(uploaded_img, pasted_img, selected_part, new_version)
+                            img_path = save_pasted_image(pasted_img, selected_part, new_version)
                             if img_path:
                                 st.session_state.pop("clipboard_non_up_new_img", None)
                                     
@@ -1156,7 +1144,7 @@ elif st.session_state.current_page == "Part Management":
                         edit_weight = st.number_input("Update Weight (g)", value=float(row_to_edit['Weight (g)']), format="%.2f", key="edit_up_wt")
                         edit_desc = st.text_area("Update Description", value=row_to_edit['Description'], key="edit_up_desc")
                     with col2:
-                        uploaded_edit_img, pasted_edit_img = render_image_input("Update Image", key="edit_up_img")
+                        pasted_edit_img = render_image_input("Atualizar Imagem (Print / Screenshot)", key="edit_up_img", current_image_path=row_to_edit.get('Image Path'))
 
                     st.markdown("**Update Constraints**")
                     meas_df_edit = pd.DataFrame(parse_measurements(row_to_edit['Constraints']))
@@ -1216,7 +1204,7 @@ elif st.session_state.current_page == "Part Management":
                         del_clicked = st.button("Delete Entire Part", use_container_width=True, key="del_up_part_btn")
 
                     if save_clicked:
-                        new_img_path = save_uploaded_or_pasted_image(uploaded_edit_img, pasted_edit_img, selected_part, version_to_edit)
+                        new_img_path = save_pasted_image(pasted_edit_img, selected_part, version_to_edit)
                         if new_img_path:
                             df_parts.at[selected_idx, 'Image Path'] = new_img_path
                             st.session_state.pop("clipboard_edit_up_img", None)
@@ -1273,7 +1261,7 @@ elif st.session_state.current_page == "Part Management":
                         edited_meas_edit = st.data_editor(meas_df_edit, num_rows="dynamic", use_container_width=True, key="de_edit_non_up")
                         
                         edit_desc = st.text_area("Update Description", value=row_to_edit['Description'], key="edit_non_up_desc")
-                        uploaded_edit_img, pasted_edit_img = render_image_input("Update Image", key="edit_non_up_img")
+                        pasted_edit_img = render_image_input("Atualizar Imagem (Print / Screenshot)", key="edit_non_up_img", current_image_path=row_to_edit.get('Image Path'))
                         
                         st.markdown("""
                         <style>
@@ -1299,7 +1287,7 @@ elif st.session_state.current_page == "Part Management":
                             del_clicked = st.button("Delete Entire Part", use_container_width=True, key="del_non_up_part_btn")
                         
                         if save_clicked:
-                            new_img_path = save_uploaded_or_pasted_image(uploaded_edit_img, pasted_edit_img, selected_part, version_to_edit)
+                            new_img_path = save_pasted_image(pasted_edit_img, selected_part, version_to_edit)
                             if new_img_path:
                                 df_parts.at[selected_idx, 'Image Path'] = new_img_path
                                 st.session_state.pop("clipboard_edit_non_up_img", None)
