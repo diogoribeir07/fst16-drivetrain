@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import json
+import time
 from datetime import datetime
 from PIL import Image
 try:
@@ -35,40 +36,44 @@ def resolve_image_path(path_str):
 def grab_image_from_clipboard():
     if ImageGrab is None:
         return None
-    try:
-        img = ImageGrab.grabclipboard()
-        if isinstance(img, Image.Image):
-            return img
-        elif isinstance(img, list) and len(img) > 0:
-            if os.path.exists(img[0]):
-                return Image.open(img[0])
-    except Exception:
-        pass
+    for _ in range(3):
+        try:
+            img = ImageGrab.grabclipboard()
+            if isinstance(img, Image.Image):
+                return img
+            elif isinstance(img, list) and len(img) > 0:
+                if os.path.exists(img[0]):
+                    return Image.open(img[0])
+        except Exception:
+            pass
+        time.sleep(0.1)
     return None
 
 def render_image_input(label="Imagem (Print / Screenshot)", key="img_input", current_image_path=None):
     clipboard_key = f"clipboard_{key}"
     st.markdown(f"**{label}**")
 
-    pasted_img = st.session_state.get(clipboard_key, None)
-
     col_paste, col_clear = st.columns([1, 1])
     with col_paste:
+        pasted_img = st.session_state.get(clipboard_key, None)
         btn_label = "Substituir do Clipboard" if (pasted_img is not None or current_image_path) else "Colar do Clipboard"
         if st.button(btn_label, key=f"btn_paste_{key}", use_container_width=True):
             pasted = grab_image_from_clipboard()
             if pasted is not None:
                 st.session_state[clipboard_key] = pasted
                 st.toast("Imagem colada do clipboard com sucesso.")
+                st.rerun()
             else:
-                st.warning("Nenhuma imagem detetada no clipboard do sistema.")
+                st.warning("Nenhuma imagem detetada no clipboard do sistema. Tira o print primeiro (Win + Shift + S).")
 
     with col_clear:
+        pasted_img = st.session_state.get(clipboard_key, None)
         if pasted_img is not None:
             if st.button("Remover Imagem Colada", key=f"btn_clear_{key}", use_container_width=True):
                 st.session_state.pop(clipboard_key, None)
                 st.rerun()
 
+    pasted_img = st.session_state.get(clipboard_key, None)
     if pasted_img is not None:
         st.image(pasted_img, caption="Nova imagem a guardar (Clica no canto para ver em ecrã inteiro)", use_container_width=True)
     elif current_image_path:
@@ -84,6 +89,31 @@ def save_pasted_image(pasted_image, part_name, version_str):
     version_clean = str(version_str).lstrip('vV').replace('.', '_')
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{part_name}_v{version_clean}_{timestamp}.png"
+    filepath = os.path.join(IMAGE_DIR, filename)
+    pasted_image.save(filepath, format="PNG")
+    return f"images/{filename}"
+
+def parse_lc_images(val):
+    if pd.isna(val) or str(val).strip() in ["", "nan", "None"]:
+        return {}
+    try:
+        data = json.loads(str(val).strip())
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+def format_lc_images(img_dict):
+    cleaned = {k: v for k, v in img_dict.items() if v and str(v).strip()}
+    return json.dumps(cleaned)
+
+def save_lc_image(pasted_image, part_name, version_str, lc_key):
+    if pasted_image is None:
+        return ""
+    version_clean = str(version_str).lstrip('vV').replace('.', '_')
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{part_name}_v{version_clean}_{lc_key}_{timestamp}.png"
     filepath = os.path.join(IMAGE_DIR, filename)
     pasted_image.save(filepath, format="PNG")
     return f"images/{filename}"
@@ -106,7 +136,7 @@ def save_formatted_excel(df, filename, table_name="DataTable"):
                 col_letter = get_column_letter(idx)
                 
                 # Widths and Wrap Text
-                if col in ["Description", "Constraints", "Part Configuration", "Image Path", "Stiffness Data"]:
+                if col in ["Description", "Constraints", "Part Configuration", "Image Path", "Stiffness Data", "LC Images"]:
                     worksheet.column_dimensions[col_letter].width = 45
                     for row in range(2, len(df) + 2):
                         worksheet.cell(row=row, column=idx).alignment = Alignment(wrap_text=True, vertical='top')
@@ -340,6 +370,8 @@ def load_parts():
             df = pd.read_excel(EXCEL_PARTS)
             if "Stiffness Data" not in df.columns:
                 df["Stiffness Data"] = ""
+            if "LC Images" not in df.columns:
+                df["LC Images"] = ""
             
             # Auto-seed UP_01 stiffness data if empty
             needs_save = False
@@ -367,7 +399,7 @@ def load_parts():
     else:
         return pd.DataFrame(columns=[
             "Subassembly", "Part Name", "Version", "Date", 
-            "Weight (g)", "Description", "Constraints", "Image Path", "Stiffness Data"
+            "Weight (g)", "Description", "Constraints", "Image Path", "Stiffness Data", "LC Images"
         ])
 
 def save_parts(df):
@@ -851,7 +883,8 @@ elif st.session_state.current_page == "Part Management":
                         "Weight (g)": weight, "Description": desc, 
                         "Constraints": format_measurements(edited_meas.to_dict('records')),
                         "Image Path": img_path,
-                        "Stiffness Data": new_stiffness
+                        "Stiffness Data": new_stiffness,
+                        "LC Images": ""
                     }
                     df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                     save_parts(df_parts)
@@ -874,6 +907,12 @@ elif st.session_state.current_page == "Part Management":
             part_data = df_parts[df_parts["Part Name"] == selected_part].sort_values("Date")
             latest_iter = part_data.iloc[-1]
             
+            # Safe application of pending selectbox choices BEFORE widgets instantiate
+            if f"pending_eval_{selected_part}" in st.session_state:
+                st.session_state[f"comp_eval_{selected_part}"] = st.session_state.pop(f"pending_eval_{selected_part}")
+            if f"pending_edit_{selected_part}" in st.session_state:
+                st.session_state[f"sel_edit_{selected_part}"] = st.session_state.pop(f"pending_edit_{selected_part}")
+
             st.title(f"{selected_part} (Subassembly: {latest_iter['Subassembly']})")
             
             tab_geral, tab_nova, tab_editar = st.tabs(["Overview & History", "+ New Iteration", "Edit Iteration"])
@@ -954,6 +993,19 @@ elif st.session_state.current_page == "Part Management":
                         df_view = build_comparison_dataframe(eval_stiff, ref_stiff, ref_label=ref_label, curr_label=eval_label)
                         st.dataframe(style_comparison_dataframe(df_view), use_container_width=True, hide_index=True)
 
+                        eval_lc_dict = parse_lc_images(eval_row.get("LC Images", ""))
+                        if eval_lc_dict:
+                            with st.expander(f"FEA Screenshots por Load Case ({eval_label})", expanded=False):
+                                avail_lcs = [lc for lc in LC_KEYS if lc in eval_lc_dict]
+                                if avail_lcs:
+                                    view_tabs = st.tabs([f"{lc}" for lc in avail_lcs])
+                                    for idx_lc, lc in enumerate(avail_lcs):
+                                        with view_tabs[idx_lc]:
+                                            st.write(f"**{lc} — {LC_INFO[lc]['desc']}**")
+                                            img_f = resolve_image_path(eval_lc_dict[lc])
+                                            if img_f:
+                                                st.image(img_f, caption=f"{eval_label} — {lc} ({LC_INFO[lc]['desc']})", use_container_width=True)
+
                 st.divider()
                 st.subheader("History")
                 for i, row in part_data.sort_values("Date", ascending=False).iterrows():
@@ -974,20 +1026,34 @@ elif st.session_state.current_page == "Part Management":
 
                         if selected_part == "UP_01":
                             h_stiff = parse_stiffness_data(row.get("Stiffness Data", ""))
-                            if h_stiff:
+                            h_lc_dict = parse_lc_images(row.get("LC Images", ""))
+                            if h_stiff or h_lc_dict:
                                 ver_str = str(row['Version'])
                                 with st.expander(f"FEA Data (v{ver_str})", expanded=False):
-                                    earlier_rows = part_data[part_data["Date"] < row["Date"]].sort_values("Date")
-                                    if not earlier_rows.empty:
-                                        p_row = earlier_rows.iloc[-1]
-                                        p_stiff = parse_stiffness_data(p_row.get("Stiffness Data", ""))
-                                        if not p_stiff: p_stiff = DEFAULT_FST15_DISPLACEMENTS
-                                        h_ref_lbl = f"v{p_row['Version']}"
-                                    else:
-                                        p_stiff = DEFAULT_FST15_DISPLACEMENTS
-                                        h_ref_lbl = "FST15"
-                                    h_df = build_comparison_dataframe(h_stiff, p_stiff, ref_label=h_ref_lbl, curr_label=format_v_label(ver_str))
-                                    st.dataframe(style_comparison_dataframe(h_df), use_container_width=True, hide_index=True)
+                                    if h_stiff:
+                                        earlier_rows = part_data[part_data["Date"] < row["Date"]].sort_values("Date")
+                                        if not earlier_rows.empty:
+                                            p_row = earlier_rows.iloc[-1]
+                                            p_stiff = parse_stiffness_data(p_row.get("Stiffness Data", ""))
+                                            if not p_stiff: p_stiff = DEFAULT_FST15_DISPLACEMENTS
+                                            h_ref_lbl = f"v{p_row['Version']}"
+                                        else:
+                                            p_stiff = DEFAULT_FST15_DISPLACEMENTS
+                                            h_ref_lbl = "FST15"
+                                        h_df = build_comparison_dataframe(h_stiff, p_stiff, ref_label=h_ref_lbl, curr_label=format_v_label(ver_str))
+                                        st.dataframe(style_comparison_dataframe(h_df), use_container_width=True, hide_index=True)
+
+                                    if h_lc_dict:
+                                        st.markdown("**FEA Screenshots:**")
+                                        avail_h_lcs = [lc for lc in LC_KEYS if lc in h_lc_dict]
+                                        if avail_h_lcs:
+                                            h_view_tabs = st.tabs([f"{lc}" for lc in avail_h_lcs])
+                                            for j_lc, lc in enumerate(avail_h_lcs):
+                                                with h_view_tabs[j_lc]:
+                                                    st.caption(f"{lc} — {LC_INFO[lc]['desc']}")
+                                                    img_f = resolve_image_path(h_lc_dict[lc])
+                                                    if img_f:
+                                                        st.image(img_f, caption=f"v{ver_str} — {lc}", use_container_width=True)
 
                         st.markdown("---")
 
@@ -1063,11 +1129,34 @@ elif st.session_state.current_page == "Part Management":
                             d_val = 0.0
                         user_stiff_vals[lc] = d_val
 
+                    st.markdown("##### Screenshots por Load Case (LC1 – LC9)")
+                    st.caption("Podes colar o print/screenshot de cada caso de carga (nTop / Ansys) para documentação.")
+
+                    user_lc_images = {}
+                    with st.expander("Anexar Screenshots por Load Case (Opcional)", expanded=False):
+                        lc_tabs_new = st.tabs([f"{lc}" for lc in LC_KEYS])
+                        for i_lc, lc in enumerate(LC_KEYS):
+                            with lc_tabs_new[i_lc]:
+                                st.write(f"**{lc} — {LC_INFO[lc]['desc']}**")
+                                pasted_lc = render_image_input(
+                                    label=f"Print do {lc}",
+                                    key=f"new_up_lc_{lc}"
+                                )
+                                if pasted_lc is not None:
+                                    user_lc_images[lc] = pasted_lc
+
                     if st.button("Save New Iteration", type="primary", use_container_width=True, key="save_up_new_btn"):
                         new_version = str(new_version).lstrip('vV')
                         img_path = save_pasted_image(pasted_img, selected_part, new_version)
                         if img_path:
                             st.session_state.pop("clipboard_up_new_img", None)
+
+                        saved_lc_paths = {}
+                        for lc, img in user_lc_images.items():
+                            s_path = save_lc_image(img, selected_part, new_version, lc)
+                            if s_path:
+                                saved_lc_paths[lc] = s_path
+                                st.session_state.pop(f"clipboard_new_up_lc_{lc}", None)
 
                         final_meas = [r for r in edited_meas_nova.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                         new_row = {
@@ -1079,13 +1168,14 @@ elif st.session_state.current_page == "Part Management":
                             "Description": desc,
                             "Constraints": format_measurements(final_meas),
                             "Image Path": img_path,
-                            "Stiffness Data": format_stiffness_data(user_stiff_vals)
+                            "Stiffness Data": format_stiffness_data(user_stiff_vals),
+                            "LC Images": format_lc_images(saved_lc_paths)
                         }
                         df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                         save_parts(df_parts)
                         new_idx = df_parts.index[-1]
-                        st.session_state[f"sel_edit_{selected_part}"] = new_idx
-                        st.session_state[f"comp_eval_{selected_part}"] = str(new_version)
+                        st.session_state[f"pending_edit_{selected_part}"] = new_idx
+                        st.session_state[f"pending_eval_{selected_part}"] = str(new_version)
                         st.session_state.pop(f"up01_stiff_editor_nova_{latest_iter['Version']}", None)
                         st.success(f"Nova iteração v{new_version} criada com sucesso!")
                         st.rerun()
@@ -1131,13 +1221,14 @@ elif st.session_state.current_page == "Part Management":
                                 "Weight (g)": weight, "Description": desc, 
                                 "Constraints": format_measurements(final_meas),
                                 "Image Path": img_path,
-                                "Stiffness Data": ""
+                                "Stiffness Data": "",
+                                "LC Images": ""
                             }
                             df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                             save_parts(df_parts)
                             new_idx = df_parts.index[-1]
-                            st.session_state[f"sel_edit_{selected_part}"] = new_idx
-                            st.session_state[f"comp_eval_{selected_part}"] = str(new_version)
+                            st.session_state[f"pending_edit_{selected_part}"] = new_idx
+                            st.session_state[f"pending_eval_{selected_part}"] = str(new_version)
                             st.success("New iteration added!")
                             st.rerun()
 
@@ -1241,6 +1332,26 @@ elif st.session_state.current_page == "Part Management":
                             d_val = 0.0
                         user_edit_vals[lc] = d_val
 
+                    st.markdown("##### Screenshots por Load Case (LC1 – LC9)")
+                    st.caption("Atualiza ou adiciona prints de cada caso de carga desta iteração.")
+
+                    curr_lc_images = parse_lc_images(row_to_edit.get("LC Images", ""))
+                    updated_lc_images_pasted = {}
+
+                    with st.expander("Gerir Screenshots por Load Case", expanded=False):
+                        lc_tabs_edit = st.tabs([f"{lc}" for lc in LC_KEYS])
+                        for i_lc, lc in enumerate(LC_KEYS):
+                            with lc_tabs_edit[i_lc]:
+                                st.write(f"**{lc} — {LC_INFO[lc]['desc']}**")
+                                existing_lc_img = curr_lc_images.get(lc, None)
+                                pasted_lc = render_image_input(
+                                    label=f"Print do {lc}",
+                                    key=f"edit_up_lc_{selected_idx}_{lc}",
+                                    current_image_path=existing_lc_img
+                                )
+                                if pasted_lc is not None:
+                                    updated_lc_images_pasted[lc] = pasted_lc
+
                     c_save, c_del_iter, c_del = st.columns([2, 2, 2])
                     with c_save:
                         save_clicked = st.button("Save Changes", type="primary", use_container_width=True, key=f"save_up_edit_btn_{selected_idx}")
@@ -1255,11 +1366,19 @@ elif st.session_state.current_page == "Part Management":
                             df_parts.at[selected_idx, 'Image Path'] = new_img_path
                             st.session_state.pop(f"clipboard_edit_up_img_{selected_idx}", None)
 
+                        final_lc_images = dict(curr_lc_images)
+                        for lc, img in updated_lc_images_pasted.items():
+                            new_lc_p = save_lc_image(img, selected_part, version_to_edit, lc)
+                            if new_lc_p:
+                                final_lc_images[lc] = new_lc_p
+                                st.session_state.pop(f"clipboard_edit_up_lc_{selected_idx}_{lc}", None)
+
                         final_meas = [r for r in edited_meas_edit.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                         df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
                         df_parts.at[selected_idx, 'Description'] = edit_desc
                         df_parts.at[selected_idx, 'Constraints'] = format_measurements(final_meas)
                         df_parts.at[selected_idx, 'Stiffness Data'] = format_stiffness_data(user_edit_vals)
+                        df_parts.at[selected_idx, 'LC Images'] = format_lc_images(final_lc_images)
 
                         save_parts(df_parts)
                         st.success(f"Data for v{version_to_edit} updated successfully!")
@@ -1278,6 +1397,8 @@ elif st.session_state.current_page == "Part Management":
                             st.session_state.pop(f"edit_up_img_{selected_idx}", None)
                             st.session_state.pop(f"stiff_editor_edit_up_{selected_idx}", None)
                             st.session_state.pop(f"clipboard_edit_up_img_{selected_idx}", None)
+                            for lc in LC_KEYS:
+                                st.session_state.pop(f"clipboard_edit_up_lc_{selected_idx}_{lc}", None)
                             st.success(f"Iteration v{version_to_edit} deleted!")
                             st.rerun()
 

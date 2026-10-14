@@ -4,20 +4,20 @@ echo ========================================================
 echo       FST 16 - Publicar / Atualizar no GitHub
 echo ========================================================
 echo.
+echo Repositorio: https://github.com/diogoribeir07/fst16-drivetrain.git
+echo Dashboard:   https://fst16-drivetrain.streamlit.app
+echo.
+
+set REPO_URL=https://github.com/diogoribeir07/fst16-drivetrain.git
 
 git remote get-url origin >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo Ainda nao associaste o teu repositorio do GitHub.
-    echo.
-    echo 1. Cria um repositorio PRIVADO em: https://github.com/new
-    echo    (exemplo de nome: fst16-drivetrain)
-    echo.
-    set /p REPO_URL="2. Cola aqui o URL HTTPS do repositorio: "
-    git remote add origin !REPO_URL!
-    git branch -M main
+    git remote add origin %REPO_URL%
+) else (
+    git remote set-url origin %REPO_URL%
 )
+git branch -M main >nul 2>&1
 
-echo.
 echo A preparar ficheiros e alteracoes...
 git add .
 git commit -m "Update drivetrain tracker" >nul 2>&1
@@ -28,6 +28,7 @@ git push -u origin main
 echo.
 echo ========================================================
 echo Envio concluido!
-echo A dashboard no Streamlit Cloud atualiza-se automaticamente.
+echo A dashboard no Streamlit Cloud atualiza-se automaticamente:
+echo https://fst16-drivetrain.streamlit.app
 echo ========================================================
 pause
