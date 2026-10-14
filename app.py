@@ -1083,6 +1083,9 @@ elif st.session_state.current_page == "Part Management":
                         }
                         df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                         save_parts(df_parts)
+                        new_idx = df_parts.index[-1]
+                        st.session_state[f"sel_edit_{selected_part}"] = new_idx
+                        st.session_state[f"comp_eval_{selected_part}"] = str(new_version)
                         st.session_state.pop(f"up01_stiff_editor_nova_{latest_iter['Version']}", None)
                         st.success(f"Nova iteração v{new_version} criada com sucesso!")
                         st.rerun()
@@ -1126,12 +1129,15 @@ elif st.session_state.current_page == "Part Management":
                                 "Subassembly": latest_iter['Subassembly'], "Part Name": selected_part, "Version": new_version,
                                 "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "Weight (g)": weight, "Description": desc, 
-                                "Constraints": format_measurements(edited_meas_nova.to_dict('records')),
+                                "Constraints": format_measurements(final_meas),
                                 "Image Path": img_path,
                                 "Stiffness Data": ""
                             }
                             df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                             save_parts(df_parts)
+                            new_idx = df_parts.index[-1]
+                            st.session_state[f"sel_edit_{selected_part}"] = new_idx
+                            st.session_state[f"comp_eval_{selected_part}"] = str(new_version)
                             st.success("New iteration added!")
                             st.rerun()
 
@@ -1139,34 +1145,65 @@ elif st.session_state.current_page == "Part Management":
             with tab_editar:
                 if selected_part == "UP_01":
                     st.subheader("Edit Iteration Data — UP_01")
-                    version_indices = part_data.index.tolist()
+                    version_indices = part_data.sort_values("Date", ascending=False).index.tolist()
                     def format_version_option(idx):
                         r = part_data.loc[idx]
-                        return f"v{r['Version']} ({r['Date']})"
+                        return f"{format_v_label(r['Version'])} ({r['Date']})"
 
-                    selected_idx = st.selectbox("Select Version to Edit:", version_indices, format_func=format_version_option, index=len(version_indices)-1, key="sel_edit_up")
+                    sel_key = f"sel_edit_{selected_part}"
+                    if sel_key in st.session_state and st.session_state[sel_key] not in version_indices:
+                        st.session_state.pop(sel_key, None)
+
+                    selected_idx = st.selectbox(
+                        "Select Version to Edit:",
+                        version_indices,
+                        format_func=format_version_option,
+                        index=0,
+                        key=sel_key
+                    )
                     row_to_edit = part_data.loc[selected_idx]
                     version_to_edit = row_to_edit["Version"]
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        edit_weight = st.number_input("Update Weight (g)", value=float(row_to_edit['Weight (g)']), format="%.2f", key="edit_up_wt")
-                        edit_desc = st.text_area("Update Description", value=row_to_edit['Description'], key="edit_up_desc")
+                        edit_weight = st.number_input(
+                            "Update Weight (g)",
+                            value=float(row_to_edit['Weight (g)']),
+                            format="%.2f",
+                            key=f"edit_up_wt_{selected_idx}"
+                        )
+                        edit_desc = st.text_area(
+                            "Update Description",
+                            value=row_to_edit['Description'],
+                            key=f"edit_up_desc_{selected_idx}"
+                        )
                     with col2:
-                        pasted_edit_img = render_image_input("Atualizar Imagem (Print / Screenshot)", key="edit_up_img", current_image_path=row_to_edit.get('Image Path'))
+                        pasted_edit_img = render_image_input(
+                            "Atualizar Imagem (Print / Screenshot)",
+                            key=f"edit_up_img_{selected_idx}",
+                            current_image_path=row_to_edit.get('Image Path')
+                        )
 
                     st.markdown("**Update Constraints**")
                     meas_df_edit = pd.DataFrame(parse_measurements(row_to_edit['Constraints']))
                     if meas_df_edit.empty or "Property" not in meas_df_edit.columns:
                         meas_df_edit = pd.DataFrame([{"Property": "", "Value": ""}])
-                    edited_meas_edit = st.data_editor(meas_df_edit, num_rows="dynamic", use_container_width=True, key="de_edit_up")
+                    edited_meas_edit = st.data_editor(
+                        meas_df_edit,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        key=f"de_edit_up_{selected_idx}"
+                    )
 
                     st.divider()
                     st.markdown("#### FEA Displacements")
 
                     curr_edit_stiff = parse_stiffness_data(row_to_edit.get("Stiffness Data", ""))
                     if not curr_edit_stiff:
-                        curr_edit_stiff = DEFAULT_FST16_DISPLACEMENTS
+                        if "FST15" in str(version_to_edit).upper():
+                            curr_edit_stiff = DEFAULT_FST15_DISPLACEMENTS
+                        else:
+                            curr_edit_stiff = DEFAULT_FST16_DISPLACEMENTS
 
                     edit_rows = []
                     for lc in LC_KEYS:
@@ -1192,7 +1229,7 @@ elif st.session_state.current_page == "Part Management":
                         },
                         use_container_width=True,
                         hide_index=True,
-                        key=f"stiff_editor_edit_{selected_idx}"
+                        key=f"stiff_editor_edit_up_{selected_idx}"
                     )
 
                     user_edit_vals = {}
@@ -1206,17 +1243,17 @@ elif st.session_state.current_page == "Part Management":
 
                     c_save, c_del_iter, c_del = st.columns([2, 2, 2])
                     with c_save:
-                        save_clicked = st.button("Save Changes", type="primary", use_container_width=True, key="save_up_edit_btn")
+                        save_clicked = st.button("Save Changes", type="primary", use_container_width=True, key=f"save_up_edit_btn_{selected_idx}")
                     with c_del_iter:
-                        del_iter_clicked = st.button("Delete Iteration", use_container_width=True, key="del_up_iter_btn")
+                        del_iter_clicked = st.button("Delete Iteration", use_container_width=True, key=f"del_up_iter_btn_{selected_idx}")
                     with c_del:
-                        del_clicked = st.button("Delete Entire Part", use_container_width=True, key="del_up_part_btn")
+                        del_clicked = st.button("Delete Entire Part", use_container_width=True, key=f"del_up_part_btn_{selected_idx}")
 
                     if save_clicked:
                         new_img_path = save_pasted_image(pasted_edit_img, selected_part, version_to_edit)
                         if new_img_path:
                             df_parts.at[selected_idx, 'Image Path'] = new_img_path
-                            st.session_state.pop("clipboard_edit_up_img", None)
+                            st.session_state.pop(f"clipboard_edit_up_img_{selected_idx}", None)
 
                         final_meas = [r for r in edited_meas_edit.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                         df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
@@ -1234,6 +1271,13 @@ elif st.session_state.current_page == "Part Management":
                         else:
                             df_parts = df_parts.drop(selected_idx)
                             save_parts(df_parts)
+                            st.session_state.pop(sel_key, None)
+                            st.session_state.pop(f"edit_up_wt_{selected_idx}", None)
+                            st.session_state.pop(f"edit_up_desc_{selected_idx}", None)
+                            st.session_state.pop(f"de_edit_up_{selected_idx}", None)
+                            st.session_state.pop(f"edit_up_img_{selected_idx}", None)
+                            st.session_state.pop(f"stiff_editor_edit_up_{selected_idx}", None)
+                            st.session_state.pop(f"clipboard_edit_up_img_{selected_idx}", None)
                             st.success(f"Iteration v{version_to_edit} deleted!")
                             st.rerun()
 
@@ -1243,6 +1287,7 @@ elif st.session_state.current_page == "Part Management":
                         save_trash(df_trash)
                         df_parts = df_parts[df_parts["Part Name"] != selected_part]
                         save_parts(df_parts)
+                        st.session_state.pop(sel_key, None)
                         st.session_state.action = "create"
                         st.session_state.selected_part = None
                         st.rerun()
@@ -1250,27 +1295,55 @@ elif st.session_state.current_page == "Part Management":
                 else:
                     st.subheader("Edit Iteration Data")
                     
-                    version_indices = part_data.index.tolist()
+                    version_indices = part_data.sort_values("Date", ascending=False).index.tolist()
                     def format_version_option(idx):
                         r = part_data.loc[idx]
-                        return f"v{r['Version']} ({r['Date']})"
+                        return f"{format_v_label(r['Version'])} ({r['Date']})"
                         
-                    selected_idx = st.selectbox("Select Version to Edit:", version_indices, format_func=format_version_option, index=len(version_indices)-1)
+                    sel_key = f"sel_edit_{selected_part}"
+                    if sel_key in st.session_state and st.session_state[sel_key] not in version_indices:
+                        st.session_state.pop(sel_key, None)
+
+                    selected_idx = st.selectbox(
+                        "Select Version to Edit:",
+                        version_indices,
+                        format_func=format_version_option,
+                        index=0,
+                        key=sel_key
+                    )
                     row_to_edit = part_data.loc[selected_idx]
                     version_to_edit = row_to_edit["Version"]
                     
                     with st.container():
                         st.caption(f"Editing data for v{version_to_edit}. Changes will overwrite this specific iteration.")
-                        edit_weight = st.number_input("Update Weight (g)", value=float(row_to_edit['Weight (g)']), format="%.2f", key="edit_non_up_wt")
+                        edit_weight = st.number_input(
+                            "Update Weight (g)",
+                            value=float(row_to_edit['Weight (g)']),
+                            format="%.2f",
+                            key=f"edit_non_up_wt_{selected_idx}"
+                        )
                         
                         st.markdown("**Update Constraints**")
                         meas_df_edit = pd.DataFrame(parse_measurements(row_to_edit['Constraints']))
                         if meas_df_edit.empty or "Property" not in meas_df_edit.columns:
                             meas_df_edit = pd.DataFrame([{"Property": "", "Value": ""}])
-                        edited_meas_edit = st.data_editor(meas_df_edit, num_rows="dynamic", use_container_width=True, key="de_edit_non_up")
+                        edited_meas_edit = st.data_editor(
+                            meas_df_edit,
+                            num_rows="dynamic",
+                            use_container_width=True,
+                            key=f"de_edit_non_up_{selected_idx}"
+                        )
                         
-                        edit_desc = st.text_area("Update Description", value=row_to_edit['Description'], key="edit_non_up_desc")
-                        pasted_edit_img = render_image_input("Atualizar Imagem (Print / Screenshot)", key="edit_non_up_img", current_image_path=row_to_edit.get('Image Path'))
+                        edit_desc = st.text_area(
+                            "Update Description",
+                            value=row_to_edit['Description'],
+                            key=f"edit_non_up_desc_{selected_idx}"
+                        )
+                        pasted_edit_img = render_image_input(
+                            "Atualizar Imagem (Print / Screenshot)",
+                            key=f"edit_non_up_img_{selected_idx}",
+                            current_image_path=row_to_edit.get('Image Path')
+                        )
                         
                         st.markdown("""
                         <style>
@@ -1289,21 +1362,22 @@ elif st.session_state.current_page == "Part Management":
                         
                         c_save, c_del_iter, c_del = st.columns([2, 2, 2])
                         with c_save:
-                            save_clicked = st.button("Save Changes", type="primary", use_container_width=True, key="save_non_up_edit_btn")
+                            save_clicked = st.button("Save Changes", type="primary", use_container_width=True, key=f"save_non_up_edit_btn_{selected_idx}")
                         with c_del_iter:
-                            del_iter_clicked = st.button("Delete Iteration", use_container_width=True, key="del_non_up_iter_btn")
+                            del_iter_clicked = st.button("Delete Iteration", use_container_width=True, key=f"del_non_up_iter_btn_{selected_idx}")
                         with c_del:
-                            del_clicked = st.button("Delete Entire Part", use_container_width=True, key="del_non_up_part_btn")
+                            del_clicked = st.button("Delete Entire Part", use_container_width=True, key=f"del_non_up_part_btn_{selected_idx}")
                         
                         if save_clicked:
                             new_img_path = save_pasted_image(pasted_edit_img, selected_part, version_to_edit)
                             if new_img_path:
                                 df_parts.at[selected_idx, 'Image Path'] = new_img_path
-                                st.session_state.pop("clipboard_edit_non_up_img", None)
+                                st.session_state.pop(f"clipboard_edit_non_up_img_{selected_idx}", None)
                                 
+                            final_meas = [r for r in edited_meas_edit.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                             df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
                             df_parts.at[selected_idx, 'Description'] = edit_desc
-                            df_parts.at[selected_idx, 'Constraints'] = format_measurements(edited_meas_edit.to_dict('records'))
+                            df_parts.at[selected_idx, 'Constraints'] = format_measurements(final_meas)
                             
                             save_parts(df_parts)
                             st.success(f"Data for v{version_to_edit} updated successfully!")
@@ -1315,6 +1389,12 @@ elif st.session_state.current_page == "Part Management":
                             else:
                                 df_parts = df_parts.drop(selected_idx)
                                 save_parts(df_parts)
+                                st.session_state.pop(sel_key, None)
+                                st.session_state.pop(f"edit_non_up_wt_{selected_idx}", None)
+                                st.session_state.pop(f"edit_non_up_desc_{selected_idx}", None)
+                                st.session_state.pop(f"de_edit_non_up_{selected_idx}", None)
+                                st.session_state.pop(f"edit_non_up_img_{selected_idx}", None)
+                                st.session_state.pop(f"clipboard_edit_non_up_img_{selected_idx}", None)
                                 st.success(f"Iteration v{version_to_edit} deleted!")
                                 st.rerun()
 
@@ -1327,6 +1407,7 @@ elif st.session_state.current_page == "Part Management":
                             # Remove from DB
                             df_parts = df_parts[df_parts["Part Name"] != selected_part]
                             save_parts(df_parts)
+                            st.session_state.pop(sel_key, None)
                             
                             st.session_state.action = "create"
                             st.session_state.selected_part = None
