@@ -1430,10 +1430,20 @@ elif st.session_state.current_page == "Part Management":
                     if first_line:
                         st.caption(f"*{first_line}*")
 
-            # Tabs: Overview, Justification, New Iteration, Edit
-            tab_overview, tab_just, tab_nova, tab_editar = st.tabs([
+            # Clean Tolerances Note at Top (only rendered if tolerances exist)
+            curr_tols = parse_tolerancing_data(latest_iter.get("Tolerancing Data", ""))
+            if curr_tols:
+                tol_features = ", ".join([str(t.get('Interface / Feature', '')).strip() for t in curr_tols if str(t.get('Interface / Feature', '')).strip()])
+                if tol_features:
+                    if len(tol_features) > 100:
+                        tol_features = tol_features[:97] + "..."
+                    st.caption(f"*Tolerances: {tol_features}*")
+
+            # Tabs: Overview, Justification, Tolerances, New Iteration, Edit
+            tab_overview, tab_just, tab_tol, tab_nova, tab_editar = st.tabs([
                 "Overview", 
                 "Justification", 
+                "Tolerances",
                 "New Iteration", 
                 "Edit"
             ])
@@ -1691,6 +1701,66 @@ elif st.session_state.current_page == "Part Management":
                                 st.success("Justification removed.")
                                 st.rerun()
 
+            # ---------- TAB: TOLERANCES ----------
+            with tab_tol:
+                st.subheader("Component Tolerances")
+                curr_comp_tols = parse_tolerancing_data(latest_iter.get("Tolerancing Data", ""))
+                has_tols = st.checkbox(
+                    "Include Tolerances",
+                    value=bool(curr_comp_tols),
+                    key=f"tab_tol_cb_{selected_part}"
+                )
+                if has_tols:
+                    tol_records = curr_comp_tols if curr_comp_tols else [{
+                        "Interface / Feature": "",
+                        "Nominal (mm)": "",
+                        "Fit / Tolerance": "",
+                        "Roughness / Notes": ""
+                    }]
+                    tol_df_edit = pd.DataFrame(tol_records)
+                    edited_tols = st.data_editor(
+                        tol_df_edit,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        key=f"tab_tol_editor_{selected_part}"
+                    )
+                else:
+                    st.caption("No tolerances defined for this component.")
+
+                c_t1, c_t2 = st.columns(2)
+                with c_t1:
+                    if st.button("Save", type="primary", use_container_width=True, key=f"btn_save_tol_{selected_part}"):
+                        final_tol = []
+                        if has_tols:
+                            for r in edited_tols.to_dict('records'):
+                                if any(str(v).strip() for v in r.values()):
+                                    feat = str(r.get("Interface / Feature", "")).strip()
+                                    if feat:
+                                        final_tol.append({
+                                            "Interface / Feature": feat,
+                                            "Nominal (mm)": str(r.get("Nominal (mm)", "")).strip(),
+                                            "Fit / Tolerance": str(r.get("Fit / Tolerance", "")).strip(),
+                                            "Roughness / Notes": str(r.get("Roughness / Notes", "")).strip()
+                                        })
+                        formatted_tol = format_tolerancing_data(final_tol) if final_tol else ""
+                        if "Tolerancing Data" in df_parts.columns and df_parts["Tolerancing Data"].dtype != object:
+                            df_parts["Tolerancing Data"] = df_parts["Tolerancing Data"].astype(object)
+                        mask = df_parts["Part Name"] == selected_part
+                        df_parts.loc[mask, "Tolerancing Data"] = formatted_tol
+                        save_parts(df_parts)
+                        st.success("Tolerances saved.")
+                        st.rerun()
+                with c_t2:
+                    if curr_comp_tols:
+                        if st.button("Remove", use_container_width=True, key=f"btn_rem_tol_{selected_part}"):
+                            if "Tolerancing Data" in df_parts.columns and df_parts["Tolerancing Data"].dtype != object:
+                                df_parts["Tolerancing Data"] = df_parts["Tolerancing Data"].astype(object)
+                            mask = df_parts["Part Name"] == selected_part
+                            df_parts.loc[mask, "Tolerancing Data"] = ""
+                            save_parts(df_parts)
+                            st.success("Tolerances removed.")
+                            st.rerun()
+
             # ---------- TAB: NEW ITERATION ----------
             with tab_nova:
                 st.subheader("New Iteration")
@@ -1725,13 +1795,6 @@ elif st.session_state.current_page == "Part Management":
                     if meas_df_nova.empty or "Property" not in meas_df_nova.columns:
                         meas_df_nova = pd.DataFrame([{"Property": "", "Value": ""}])
                     edited_meas_nova = st.data_editor(meas_df_nova, num_rows="dynamic", use_container_width=True, key=f"new_meas_{selected_part}")
-
-                    st.markdown("**Tolerances**")
-                    raw_tol = parse_tolerancing_data(latest_iter.get('Tolerancing Data', ''))
-                    tol_df_nova = pd.DataFrame(raw_tol) if raw_tol else pd.DataFrame([{
-                        "Interface / Feature": "", "Nominal (mm)": "", "Fit / Tolerance": "", "Roughness / Notes": ""
-                    }])
-                    edited_tol_nova = st.data_editor(tol_df_nova, num_rows="dynamic", use_container_width=True, key=f"new_tol_{selected_part}")
                     
                 with col_img:
                     pasted_img = render_image_input(
@@ -1845,7 +1908,9 @@ elif st.session_state.current_page == "Part Management":
                             st.session_state.pop(f"clipboard_new_bracket_fea_{selected_part}", None)
 
                     final_meas = [r for r in edited_meas_nova.to_dict('records') if str(r.get('Property', '')).strip() != ""]
-                    final_tol = [r for r in edited_tol_nova.to_dict('records') if str(r.get('Interface / Feature', '')).strip() != ""]
+                    comp_tol = str(latest_iter.get("Tolerancing Data", "")).strip()
+                    if comp_tol in ["nan", "[]"]:
+                        comp_tol = ""
 
                     comp_just = str(latest_iter.get("Justification", "")).strip()
                     if comp_just == "nan":
@@ -1864,7 +1929,7 @@ elif st.session_state.current_page == "Part Management":
                         "Weight (g)": weight,
                         "Description": desc,
                         "Specifications": format_measurements(final_meas),
-                        "Tolerancing Data": format_tolerancing_data(final_tol),
+                        "Tolerancing Data": comp_tol,
                         "Image Path": img_path,
                         "Stiffness Data": format_stiffness_data(user_stiff_vals) if selected_part == "UP_01" else (json.dumps(user_stiff_vals) if user_stiff_vals else ""),
                         "LC Images": format_lc_images(saved_lc_paths),
@@ -1873,6 +1938,7 @@ elif st.session_state.current_page == "Part Management":
                     df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                     part_mask = df_parts["Part Name"] == selected_part
                     df_parts.loc[part_mask, "Justification"] = comp_just
+                    df_parts.loc[part_mask, "Tolerancing Data"] = comp_tol
                     save_parts(df_parts)
                     new_idx = df_parts.index[-1]
                     st.session_state[f"pending_edit_{selected_part}"] = new_idx
@@ -1931,18 +1997,6 @@ elif st.session_state.current_page == "Part Management":
                         num_rows="dynamic",
                         use_container_width=True,
                         key=f"de_edit_meas_{selected_idx}"
-                    )
-
-                    st.markdown("**Tolerances**")
-                    raw_tol_edit = parse_tolerancing_data(row_to_edit.get('Tolerancing Data', ''))
-                    tol_df_edit = pd.DataFrame(raw_tol_edit) if raw_tol_edit else pd.DataFrame([{
-                        "Interface / Feature": "", "Nominal (mm)": "", "Fit / Tolerance": "", "Roughness / Notes": ""
-                    }])
-                    edited_tol_edit = st.data_editor(
-                        tol_df_edit,
-                        num_rows="dynamic",
-                        use_container_width=True,
-                        key=f"de_edit_tol_{selected_idx}"
                     )
 
                 with col_img:
@@ -2087,7 +2141,6 @@ elif st.session_state.current_page == "Part Management":
                             st.session_state.pop(f"clipboard_edit_bracket_fea_{selected_idx}", None)
 
                     final_meas = [r for r in edited_meas_edit.to_dict('records') if str(r.get('Property', '')).strip() != ""]
-                    final_tol = [r for r in edited_tol_edit.to_dict('records') if str(r.get('Interface / Feature', '')).strip() != ""]
 
                     # Ensure text columns have object dtype so string assignment never raises LossySetitemError
                     text_cols_save = ["Description", "Specifications", "Tolerancing Data", "Stiffness Data", "LC Images", "Justification", "Image Path"]
@@ -2098,7 +2151,6 @@ elif st.session_state.current_page == "Part Management":
                     df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
                     df_parts.at[selected_idx, 'Description'] = edit_desc
                     df_parts.at[selected_idx, 'Specifications'] = format_measurements(final_meas)
-                    df_parts.at[selected_idx, 'Tolerancing Data'] = format_tolerancing_data(final_tol)
                     if selected_part == "UP_01":
                         df_parts.at[selected_idx, 'Stiffness Data'] = format_stiffness_data(user_edit_stiff_vals)
                         df_parts.at[selected_idx, 'LC Images'] = format_lc_images(final_lc_images)
