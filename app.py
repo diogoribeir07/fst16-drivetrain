@@ -13,6 +13,7 @@ except ImportError:
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from bearing_sizer import render_bearing_sizer_page
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -797,6 +798,15 @@ if st.sidebar.button("Requirements", use_container_width=True, type="primary" if
     st.session_state.action = "view"
     st.rerun()
 
+# Bearing Sizer button
+sizer_active = (st.session_state.current_page == "Bearing Sizer")
+if st.sidebar.button("Bearing Sizer", use_container_width=True, type="primary" if sizer_active else "secondary"):
+    st.session_state.current_page = "Bearing Sizer"
+    st.session_state.selected_part = None
+    st.session_state.action = "view"
+    st.rerun()
+st.sidebar.caption("Bearing Calculator")
+
 st.sidebar.divider()
 
 if st.sidebar.button("+ New Part", use_container_width=True):
@@ -1294,6 +1304,12 @@ if st.session_state.current_page == "Wheel Assembly":
 elif st.session_state.current_page == "Requirements":
     st.title("Requirements")
     render_requirements_section(df_requirements)
+
+# =========================================================================
+# PAGE: BEARING SIZER
+# =========================================================================
+elif st.session_state.current_page == "Bearing Sizer":
+    render_bearing_sizer_page()
 
 
 # =========================================================================
