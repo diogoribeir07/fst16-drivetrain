@@ -556,84 +556,9 @@ DEFAULT_JUSTIFICATIONS = {
     "UP_04": "Motor Back Plate providing an accessible visual installation plane for the motor cooling jacket O-ring, eliminating blind insertion leak risks during motor assembly, and shielding the upright cavity from thermal soak."
 }
 
-DEFAULT_OEM_TOLERANCES = {
-    "61815": [
-        {"Interface / Feature": "Shaft Seat (d=75mm)", "Nominal (mm)": "75", "Fit / Tolerance": "k5 (+0.009 / +0.002 mm)", "Roughness / Notes": "Ra <= 0.4 um (ground)"},
-        {"Interface / Feature": "Housing Bore (D=95mm)", "Nominal (mm)": "95", "Fit / Tolerance": "H7 (+0.030 / 0 mm)", "Roughness / Notes": "Ra <= 1.6 um"},
-        {"Interface / Feature": "Shaft Shoulder (da min)", "Nominal (mm)": "78.2", "Fit / Tolerance": "da >= 78.2 mm (h11)", "Roughness / Notes": "ra max = 0.6 mm"},
-        {"Interface / Feature": "Housing Shoulder (Da max)", "Nominal (mm)": "91.8", "Fit / Tolerance": "Da <= 91.8 mm (H11)", "Roughness / Notes": "ra max = 0.6 mm"},
-        {"Interface / Feature": "Shaft Radial Runout", "Nominal (mm)": "75", "Fit / Tolerance": "IT4 (0.004 mm)", "Roughness / Notes": "Max permissible TIR"}
-    ],
-    "61816": [
-        {"Interface / Feature": "Shaft Seat (d=80mm)", "Nominal (mm)": "80", "Fit / Tolerance": "k5 (+0.009 / +0.002 mm)", "Roughness / Notes": "Ra <= 0.4 um (ground)"},
-        {"Interface / Feature": "Housing Bore (D=100mm)", "Nominal (mm)": "100", "Fit / Tolerance": "H7 (+0.035 / 0 mm)", "Roughness / Notes": "Ra <= 1.6 um"},
-        {"Interface / Feature": "Shaft Shoulder (da min)", "Nominal (mm)": "83.2", "Fit / Tolerance": "da >= 83.2 mm (h11)", "Roughness / Notes": "ra max = 0.6 mm"},
-        {"Interface / Feature": "Housing Shoulder (Da max)", "Nominal (mm)": "96.8", "Fit / Tolerance": "Da <= 96.8 mm (H11)", "Roughness / Notes": "ra max = 0.6 mm"},
-        {"Interface / Feature": "Shaft Radial Runout", "Nominal (mm)": "80", "Fit / Tolerance": "IT4 (0.004 mm)", "Roughness / Notes": "Max permissible TIR"},
-        {"Interface / Feature": "Shoulder Axial Runout", "Nominal (mm)": "83.2", "Fit / Tolerance": "IT4 (0.005 mm)", "Roughness / Notes": "Perpendicularity to axis"}
-    ],
-    "71815-TN": [
-        {"Interface / Feature": "Shaft Seat (d=75mm)", "Nominal (mm)": "75", "Fit / Tolerance": "m5 (+0.015 / +0.006 mm)", "Roughness / Notes": "Ra <= 0.4 um (ground)"},
-        {"Interface / Feature": "Housing Bore (D=95mm)", "Nominal (mm)": "95", "Fit / Tolerance": "J7 (+0.018 / -0.012 mm)", "Roughness / Notes": "Ra <= 1.6 um (light preload)"},
-        {"Interface / Feature": "Shaft Shoulder (da min)", "Nominal (mm)": "79.5", "Fit / Tolerance": "da >= 79.5 mm", "Roughness / Notes": "ra max = 0.6 mm"},
-        {"Interface / Feature": "Housing Shoulder (Da max)", "Nominal (mm)": "90.5", "Fit / Tolerance": "Da <= 90.5 mm", "Roughness / Notes": "ra max = 0.6 mm"}
-    ],
-    "71816-TN": [
-        {"Interface / Feature": "Shaft Seat (d=80mm)", "Nominal (mm)": "80", "Fit / Tolerance": "m5 (+0.015 / +0.006 mm)", "Roughness / Notes": "Ra <= 0.4 um (ground)"},
-        {"Interface / Feature": "Housing Bore (D=100mm)", "Nominal (mm)": "100", "Fit / Tolerance": "J7 (+0.018 / -0.012 mm)", "Roughness / Notes": "Ra <= 1.6 um (light preload)"},
-        {"Interface / Feature": "Shaft Shoulder (da min)", "Nominal (mm)": "84.5", "Fit / Tolerance": "da >= 84.5 mm", "Roughness / Notes": "ra max = 0.6 mm"},
-        {"Interface / Feature": "Housing Shoulder (Da max)", "Nominal (mm)": "95.5", "Fit / Tolerance": "Da <= 95.5 mm", "Roughness / Notes": "ra max = 0.6 mm"}
-    ],
-    "85X100X9 HMSA10 V": [
-        {"Interface / Feature": "Shaft Counterface (d1=85mm)", "Nominal (mm)": "85", "Fit / Tolerance": "h11 (0 / -0.220 mm)", "Roughness / Notes": "Ra = 0.2 - 0.5 um (plunge ground, zero lead)"},
-        {"Interface / Feature": "Housing Bore (D=100mm)", "Nominal (mm)": "100", "Fit / Tolerance": "H8 (+0.054 / 0 mm)", "Roughness / Notes": "Ra = 1.6 - 3.2 um"},
-        {"Interface / Feature": "Lead-in Chamfer", "Nominal (mm)": "15 to 30 deg", "Fit / Tolerance": "Length >= 3 mm", "Roughness / Notes": "Edges rounded and burr-free"},
-        {"Interface / Feature": "Shaft Surface Hardness", "Nominal (mm)": "Contact zone", "Fit / Tolerance": ">= 45 HRC (recommended 58 HRC)", "Roughness / Notes": "Case depth >= 0.3 mm"},
-        {"Interface / Feature": "Dynamic Eccentricity / Runout", "Nominal (mm)": "7020 rpm", "Fit / Tolerance": "< 0.05 mm", "Roughness / Notes": "Max permissible TIR"}
-    ],
-    "95X110X9 HMSA10 V": [
-        {"Interface / Feature": "Shaft Counterface (d1=95mm)", "Nominal (mm)": "95", "Fit / Tolerance": "h11 (0 / -0.220 mm)", "Roughness / Notes": "Ra = 0.2 - 0.5 um (plunge ground, zero lead)"},
-        {"Interface / Feature": "Housing Bore (D=110mm)", "Nominal (mm)": "110", "Fit / Tolerance": "H8 (+0.054 / 0 mm)", "Roughness / Notes": "Ra = 1.6 - 3.2 um"},
-        {"Interface / Feature": "Lead-in Chamfer", "Nominal (mm)": "15 to 30 deg", "Fit / Tolerance": "Length >= 3 mm", "Roughness / Notes": "Edges rounded and burr-free"},
-        {"Interface / Feature": "Dynamic Eccentricity / Runout", "Nominal (mm)": "7000 rpm", "Fit / Tolerance": "< 0.05 mm", "Roughness / Notes": "Max permissible TIR"}
-    ]
-}
+DEFAULT_OEM_TOLERANCES = {}
 
-DEFAULT_CUSTOM_TOLERANCES = {
-    "UP_01": [
-        {"Interface / Feature": "Bearing Housing Bore (D=100mm)", "Nominal (mm)": "100", "Fit / Tolerance": "H7 (+0.035 / 0 mm)", "Roughness / Notes": "Ra <= 1.6 um (mates with 61816 bearing outer ring)"},
-        {"Interface / Feature": "Seal Housing Bore (D=100mm)", "Nominal (mm)": "100", "Fit / Tolerance": "H8 (+0.054 / 0 mm)", "Roughness / Notes": "Ra = 1.6 - 3.2 um (mates with 85x100x9 seal)"},
-        {"Interface / Feature": "Brake Caliper Mounting Bosses", "Nominal (mm)": "2x M8x1.25", "Fit / Tolerance": "Position +/- 0.05 mm", "Roughness / Notes": "Ra <= 1.6 um (radial caliper direct mount)"},
-        {"Interface / Feature": "Upper Wishbone Pickup Clevis", "Nominal (mm)": "8", "Fit / Tolerance": "H7 (+0.015 / 0 mm)", "Roughness / Notes": "Ra <= 0.8 um (suspension spherical bearing pin)"},
-        {"Interface / Feature": "Steering Tie-Rod Pickup Bore", "Nominal (mm)": "8", "Fit / Tolerance": "H7 (+0.015 / 0 mm)", "Roughness / Notes": "Ra <= 0.8 um (steering link clevis)"}
-    ],
-    "HB_01": [
-        {"Interface / Feature": "Inner Bearing Shaft Seat (d=80mm)", "Nominal (mm)": "80", "Fit / Tolerance": "k5 (+0.009 / +0.002 mm)", "Roughness / Notes": "Ra <= 0.4 um (ground, mates with 61816 bearing)"},
-        {"Interface / Feature": "Seal Running Land / Counterface (d1=85mm)", "Nominal (mm)": "85", "Fit / Tolerance": "h11 (0 / -0.220 mm)", "Roughness / Notes": "Ra = 0.2 - 0.5 um (plunge ground, zero lead)"},
-        {"Interface / Feature": "Wheel Stud Pitch Circle (PCD)", "Nominal (mm)": "4x PCD 100", "Fit / Tolerance": "Position +/- 0.05 mm", "Roughness / Notes": "Runout < 0.02 mm (wheel rim pilot)"},
-        {"Interface / Feature": "Brake Rotor Mounting Face", "Nominal (mm)": "Flatness", "Fit / Tolerance": "Axial runout < 0.015 mm", "Roughness / Notes": "Ra <= 0.8 um (prevents brake shudder)"}
-    ],
-    "UP_03": [
-        {"Interface / Feature": "Motor Pilot Spigot Register", "Nominal (mm)": "125", "Fit / Tolerance": "H7/h6 location fit", "Roughness / Notes": "Ra <= 1.6 um (motor concentricity)"},
-        {"Interface / Feature": "Cooling Jacket O-Ring Groove", "Nominal (mm)": "2.5 depth x 3.5 width", "Fit / Tolerance": "+/- 0.05 mm", "Roughness / Notes": "Ra <= 0.8 um (prevents coolant leak)"},
-        {"Interface / Feature": "Motor Stator Torque Stoppage Keyways", "Nominal (mm)": "2x Keys", "Fit / Tolerance": "+/- 0.03 mm", "Roughness / Notes": "Ra <= 1.6 um (reacts motor stator torque)"}
-    ],
-    "UP_04": [
-        {"Interface / Feature": "O-Ring Sealing Plane Flatness", "Nominal (mm)": "Sealing Face", "Fit / Tolerance": "Flat within 0.03 mm", "Roughness / Notes": "Ra <= 0.8 um (cooling jacket face seal)"},
-        {"Interface / Feature": "Cable / Port Pass-Through Bore", "Nominal (mm)": "32", "Fit / Tolerance": "+0.2 / 0 mm", "Roughness / Notes": "Deburred, edge radius >= 1.0 mm"}
-    ],
-    "UpperSupport Version": [
-        {"Interface / Feature": "Clevis Pin Bore", "Nominal (mm)": "8", "Fit / Tolerance": "H7 (+0.015 / 0 mm)", "Roughness / Notes": "Ra <= 0.8 um (wishbone pin joint)"},
-        {"Interface / Feature": "Camber Shim Interface", "Nominal (mm)": "2 mm shims", "Fit / Tolerance": "+/- 0.02 mm", "Roughness / Notes": "Ra <= 1.6 um (camber adjustment +/- 0.5 deg)"}
-    ],
-    "HB_07": [
-        {"Interface / Feature": "Spacer Inner Bore", "Nominal (mm)": "80.5", "Fit / Tolerance": "+0.2 / 0 mm", "Roughness / Notes": "Ra <= 3.2 um (clears 80mm spindle)"},
-        {"Interface / Feature": "Spacer Length (Face-to-Face)", "Nominal (mm)": "12.0", "Fit / Tolerance": "+/- 0.02 mm", "Roughness / Notes": "Parallelism < 0.005 mm (sets bearing preload)"}
-    ],
-    "HB_02": [
-        {"Interface / Feature": "Retaining Nut Thread / Bore", "Nominal (mm)": "M75x1.5", "Fit / Tolerance": "6H/6g", "Roughness / Notes": "Ra <= 1.6 um (spindle axial retention)"}
-    ]
-}
+DEFAULT_CUSTOM_TOLERANCES = {}
 
 # ==================== DATA LOAD & SAVE ====================
 # ==================== DATA LOAD & SAVE ====================
@@ -641,50 +566,23 @@ def load_parts():
     if os.path.exists(EXCEL_PARTS):
         try:
             df = pd.read_excel(EXCEL_PARTS)
-            for c in ["Specifications", "Tolerancing Data", "Stiffness Data", "LC Images", "Justification"]:
+            text_cols = [
+                "Subassembly", "Part Name", "Version", "Date", 
+                "Description", "Specifications", "Image Path", 
+                "Stiffness Data", "LC Images", "Tolerancing Data", "Justification"
+            ]
+            for c in text_cols:
                 if c not in df.columns:
                     df[c] = ""
+                else:
+                    df[c] = df[c].fillna("").astype(object)
             if "Component Status" in df.columns:
                 df = df.drop(columns=["Component Status"])
                 needs_save = True
             else:
                 needs_save = False
 
-            # Migrate / clean component justifications and descriptions
-            for p_name in df["Part Name"].unique():
-                p_mask = df["Part Name"] == p_name
-                curr_just = df.loc[p_mask, "Justification"].dropna().tolist()
-                clean_just = [str(x).strip() for x in curr_just if str(x).strip() not in ["", "nan"]]
-                has_legacy = any("#" in str(x) or "\x44\x4c" in str(x) for x in clean_just)
-                if has_legacy:
-                    df.loc[p_mask, "Justification"] = DEFAULT_JUSTIFICATIONS.get(p_name, "")
-                    needs_save = True
-                elif not clean_just and p_name in DEFAULT_JUSTIFICATIONS:
-                    df.loc[p_mask, "Justification"] = DEFAULT_JUSTIFICATIONS[p_name]
-                    needs_save = True
 
-                # Clean legacy verbose descriptions
-                for idx_p in df[p_mask].index.tolist():
-                    d_val = str(df.at[idx_p, "Description"])
-                    if "#" in d_val or "\x44\x4c" in d_val:
-                        df.at[idx_p, "Description"] = "Baseline motor back plate iteration for FST15 carry-over."
-                        needs_save = True
-
-                # Seed OEM Tolerances if empty or invalid
-                if p_name in DEFAULT_OEM_TOLERANCES:
-                    curr_tol = df.loc[p_mask, "Tolerancing Data"].dropna().tolist()
-                    has_valid_tol = any(len(parse_tolerancing_data(x)) > 0 for x in curr_tol)
-                    if not has_valid_tol:
-                        df.loc[p_mask, "Tolerancing Data"] = json.dumps(DEFAULT_OEM_TOLERANCES[p_name])
-                        needs_save = True
-
-                # Seed Custom Tolerances if empty or invalid
-                if p_name in DEFAULT_CUSTOM_TOLERANCES:
-                    curr_tol = df.loc[p_mask, "Tolerancing Data"].dropna().tolist()
-                    has_valid_tol = any(len(parse_tolerancing_data(x)) > 0 for x in curr_tol)
-                    if not has_valid_tol:
-                        df.loc[p_mask, "Tolerancing Data"] = json.dumps(DEFAULT_CUSTOM_TOLERANCES[p_name])
-                        needs_save = True
 
             # Auto-seed UP_01 stiffness data if empty
             up01_mask = df["Part Name"].astype(str) == "UP_01"
@@ -761,7 +659,13 @@ def save_parts(df):
 def load_assemblies():
     if os.path.exists(EXCEL_ASSEMBLIES):
         try:
-            return pd.read_excel(EXCEL_ASSEMBLIES)
+            df = pd.read_excel(EXCEL_ASSEMBLIES)
+            for c in ["Assembly Version", "Date", "Description", "Part Configuration"]:
+                if c in df.columns:
+                    df[c] = df[c].fillna("").astype(object)
+                else:
+                    df[c] = ""
+            return df
         except PermissionError:
             st.error(f"PERMISSION DENIED: Please close '{EXCEL_ASSEMBLIES}' in Microsoft Excel to continue.")
             st.stop()
@@ -780,9 +684,16 @@ def load_trash():
             df = pd.read_excel(EXCEL_TRASH)
             if "Component Status" in df.columns:
                 df = df.drop(columns=["Component Status"])
-            for c in ["Specifications", "Tolerancing Data", "Stiffness Data", "LC Images", "Justification"]:
+            text_cols = [
+                "Subassembly", "Part Name", "Version", "Date", 
+                "Description", "Specifications", "Image Path", 
+                "Stiffness Data", "LC Images", "Tolerancing Data", "Justification"
+            ]
+            for c in text_cols:
                 if c not in df.columns:
                     df[c] = ""
+                else:
+                    df[c] = df[c].fillna("").astype(object)
             return df
         except PermissionError:
             st.error(f"PERMISSION DENIED: Please close '{EXCEL_TRASH}' in Microsoft Excel to continue.")
@@ -806,6 +717,8 @@ def load_requirements():
             for c in ["ID", "Category", "Group", "Requirement", "Explanation", "Verification", "Validation", "Related Parts"]:
                 if c not in df.columns:
                     df[c] = ""
+                else:
+                    df[c] = df[c].fillna("").astype(object)
             return df
         except PermissionError:
             st.error(f"PERMISSION DENIED: Please close '{EXCEL_REQUIREMENTS}' in Microsoft Excel to continue.")
@@ -1040,6 +953,12 @@ def render_requirements_section(df_req):
 
     st.divider()
 
+    # Component options for Related Parts dropdown
+    component_options = sorted(list(set(
+        [str(p).strip() for p in df_parts["Part Name"].dropna().unique() if str(p).strip()] +
+        [item.strip() for x in df_req["Related Parts"].dropna() for item in str(x).split(",") if item.strip()]
+    )))
+
     col_act1, col_act2 = st.columns(2)
     with col_act1:
         with st.expander("Add Requirement"):
@@ -1051,7 +970,7 @@ def render_requirements_section(df_req):
                 new_exp = st.text_area("Explanation")
                 new_ver = st.text_input("Verification")
                 new_val = st.text_input("Validation")
-                new_rel = st.text_input("Related Parts")
+                new_rel_parts = st.multiselect("Related Parts", options=component_options, default=[], key="add_req_rel_parts")
                 if st.form_submit_button("Save", type="primary"):
                     if new_id.strip() and new_req.strip():
                         new_row = {
@@ -1062,7 +981,7 @@ def render_requirements_section(df_req):
                             "Explanation": new_exp.strip(),
                             "Verification": new_ver.strip(),
                             "Validation": new_val.strip(),
-                            "Related Parts": new_rel.strip()
+                            "Related Parts": ", ".join(new_rel_parts)
                         }
                         updated_df = pd.concat([df_req, pd.DataFrame([new_row])], ignore_index=True)
                         save_requirements(updated_df)
@@ -1084,7 +1003,10 @@ def render_requirements_section(df_req):
                     edit_exp = st.text_area("Explanation", value=str(rule_row.get("Explanation", "")))
                     edit_ver = st.text_input("Verification", value=str(rule_row.get("Verification", "")))
                     edit_val = st.text_input("Validation", value=str(rule_row.get("Validation", "")))
-                    edit_rel = st.text_input("Related Parts", value=str(rule_row.get("Related Parts", "")))
+                    current_rel_str = str(rule_row.get("Related Parts", ""))
+                    current_rel_list = [p.strip() for p in current_rel_str.split(",") if p.strip()]
+                    edit_options = sorted(list(set(component_options + current_rel_list)))
+                    edit_rel_parts = st.multiselect("Related Parts", options=edit_options, default=current_rel_list, key=f"edit_req_rel_parts_{selected_rule_id}")
                     if st.form_submit_button("Save", type="primary"):
                         idx = df_req[df_req["ID"] == selected_rule_id].index[0]
                         df_req.at[idx, "Category"] = edit_cat
@@ -1093,7 +1015,7 @@ def render_requirements_section(df_req):
                         df_req.at[idx, "Explanation"] = edit_exp.strip()
                         df_req.at[idx, "Verification"] = edit_ver.strip()
                         df_req.at[idx, "Validation"] = edit_val.strip()
-                        df_req.at[idx, "Related Parts"] = edit_rel.strip()
+                        df_req.at[idx, "Related Parts"] = ", ".join(edit_rel_parts)
                         save_requirements(df_req)
                         st.success("Requirement updated.")
                         st.rerun()
@@ -1363,24 +1285,7 @@ if st.session_state.current_page == "Wheel Assembly":
                         st.success("Assembly saved successfully.")
                         st.rerun()
 
-    st.divider()
-    with st.expander("Architecture Goals"):
-        st.markdown(r"""
-        * **Structural Upright:** Topology-optimized Al 7075-T6 body designed in nTop with direct motor mount, integrated caliper bosses, and isostatic 3-2-1 suspension boundary conditions.
-        * **Target Safety Factor:** Minimum $SF \ge 2.03$ (at 25 deg C) / $SF \ge 1.92$ (at 100 deg C thermal soak) under all load cases per Pugsley method.
-        * **Spindle & Bearings:** Upgraded spindle diameter from 75 mm (FST15) to 80 mm (FST16 with 61816 bearing) to increase wheel shaft bending stiffness while reducing hollow shaft wall mass.
-        * **Sealing Interface:** Compact SKF 85X100X9 HMSA10 V Viton radial seal with plunge-ground running land (Ra 0.2 - 0.5 um, zero lead).
-        """)
 
-    with st.expander("Core Decisions"):
-        key_decisions = [
-            {"Area": "Upright Body", "Decision": "Single-body topology optimization in nTop", "Rationale": "Higher global torsional stiffness and mass reduction (-111.4 g vs FST15 baseline)."},
-            {"Area": "Cover Plates", "Decision": "Maintain separate UP_03 and UP_04 plates for baseline", "Rationale": "Eliminates blind O-ring insertion risk and prevents cooling jacket leakage."},
-            {"Area": "Wheel Bearings", "Decision": "Upgrade from 61815 (75 mm) to 61816 (80 mm bore)", "Rationale": "Higher spindle section modulus; enables thinner wall hollow shaft while improving bending stiffness."},
-            {"Area": "Radial Sealing", "Decision": "SKF 85X100X9 HMSA10 V on plunge-ground land", "Rationale": "Compact 9 mm envelope, eliminates wear sleeve mass, Viton elastomer rated for brake disc thermal radiation."},
-            {"Area": "Suspension Pickup", "Decision": "UpperSupport bracket with camber shim interface", "Rationale": "Allows +/-0.5 deg camber tuning without remachining primary upright body; SF = 2.14 meets target."}
-        ]
-        st.dataframe(pd.DataFrame(key_decisions), hide_index=True, use_container_width=True)
 
 
 # =========================================================================
@@ -1518,37 +1423,17 @@ elif st.session_state.current_page == "Part Management":
                 curr_just = ""
 
             if curr_just:
-                with st.container(border=True):
-                    st.markdown("**Justification**")
-                    st.markdown(curr_just)
-                    with st.expander("Edit Justification"):
-                        with st.form(f"form_just_top_{selected_part}"):
-                            new_just_top = st.text_area(
-                                "Justification",
-                                value=curr_just,
-                                height=100
-                            )
-                            c_s1, c_s2 = st.columns(2)
-                            with c_s1:
-                                save_top = st.form_submit_button("Save", type="primary", use_container_width=True)
-                            with c_s2:
-                                remove_top = st.form_submit_button("Remove", use_container_width=True)
-                            if save_top:
-                                mask = df_parts["Part Name"] == selected_part
-                                df_parts.loc[mask, "Justification"] = new_just_top.strip()
-                                save_parts(df_parts)
-                                st.success("Justification saved.")
-                                st.rerun()
-                            if remove_top:
-                                mask = df_parts["Part Name"] == selected_part
-                                df_parts.loc[mask, "Justification"] = ""
-                                save_parts(df_parts)
-                                st.success("Justification removed.")
-                                st.rerun()
+                if "\n" not in curr_just and len(curr_just) <= 180:
+                    st.caption(f"*{curr_just}*")
+                else:
+                    first_line = curr_just.strip().split("\n")[0].lstrip("#").strip()
+                    if first_line:
+                        st.caption(f"*{first_line}*")
 
-            # Tabs: Overview, New Iteration, Edit
-            tab_overview, tab_nova, tab_editar = st.tabs([
+            # Tabs: Overview, Justification, New Iteration, Edit
+            tab_overview, tab_just, tab_nova, tab_editar = st.tabs([
                 "Overview", 
+                "Justification", 
                 "New Iteration", 
                 "Edit"
             ])
@@ -1688,28 +1573,10 @@ elif st.session_state.current_page == "Part Management":
 
                     st.markdown("#### Tolerances")
                     tol_data = parse_tolerancing_data(latest_iter.get("Tolerancing Data", ""))
-                    if not tol_data:
-                        if is_oem and selected_part in DEFAULT_OEM_TOLERANCES:
-                            tol_data = DEFAULT_OEM_TOLERANCES[selected_part]
-                        elif not is_oem and selected_part in DEFAULT_CUSTOM_TOLERANCES:
-                            tol_data = DEFAULT_CUSTOM_TOLERANCES[selected_part]
-                    
                     if tol_data:
                         st.dataframe(pd.DataFrame(tol_data), hide_index=True, use_container_width=True)
                     else:
                         st.caption("No tolerances recorded.")
-
-                    if is_oem:
-                        c_save_tol, c_prefill = st.columns([1, 1])
-                        with c_prefill:
-                            if selected_part in DEFAULT_OEM_TOLERANCES:
-                                if st.button("Reset Tolerances", use_container_width=True, key=f"btn_reset_tol_{selected_part}"):
-                                    formatted_tol = json.dumps(DEFAULT_OEM_TOLERANCES[selected_part])
-                                    mask = df_parts["Part Name"] == selected_part
-                                    df_parts.loc[mask, "Tolerancing Data"] = formatted_tol
-                                    save_parts(df_parts)
-                                    st.success("Tolerances reset.")
-                                    st.rerun()
 
                 with col_right:
                     st.markdown("#### Schematic")
@@ -1740,8 +1607,6 @@ elif st.session_state.current_page == "Part Management":
                             img_file = resolve_image_path(row.get('Image Path'))
                             hist_meas = parse_measurements(row.get('Specifications', row.get('Constraints', '')))
                             hist_tol = parse_tolerancing_data(row.get('Tolerancing Data', ''))
-                            if not hist_tol and selected_part in DEFAULT_CUSTOM_TOLERANCES:
-                                hist_tol = DEFAULT_CUSTOM_TOLERANCES[selected_part]
 
                             st.write(f"**Weight:** {row['Weight (g)']} g")
                             if row.get('Description'):
@@ -1781,7 +1646,50 @@ elif st.session_state.current_page == "Part Management":
                                         with st.expander("FEA Screenshot", expanded=False):
                                             st.image(img_h_b, caption=f"{selected_part} ({format_v_label(row['Version'])})", use_container_width=True)
 
-                            st.divider()
+            # ---------- TAB: JUSTIFICATION ----------
+            with tab_just:
+                st.subheader("Component Justification")
+                if curr_just:
+                    st.markdown(curr_just)
+                    st.divider()
+
+                with st.expander("Edit Justification", expanded=(not bool(curr_just))):
+                    has_just = st.checkbox(
+                        "Include Justification",
+                        value=bool(curr_just),
+                        key=f"tab_just_cb_{selected_part}"
+                    )
+                    if has_just:
+                        new_just_text = st.text_area(
+                            "Justification",
+                            value=curr_just,
+                            height=280,
+                            key=f"tab_just_text_{selected_part}"
+                        )
+                    else:
+                        new_just_text = ""
+
+                    c_j1, c_j2 = st.columns(2)
+                    with c_j1:
+                        if st.button("Save", type="primary", use_container_width=True, key=f"btn_save_just_{selected_part}"):
+                            if "Justification" in df_parts.columns and df_parts["Justification"].dtype != object:
+                                df_parts["Justification"] = df_parts["Justification"].astype(object)
+                            mask = df_parts["Part Name"] == selected_part
+                            val_to_save = new_just_text.strip() if has_just else ""
+                            df_parts.loc[mask, "Justification"] = val_to_save
+                            save_parts(df_parts)
+                            st.success("Justification saved.")
+                            st.rerun()
+                    with c_j2:
+                        if curr_just:
+                            if st.button("Remove", use_container_width=True, key=f"btn_rem_just_{selected_part}"):
+                                if "Justification" in df_parts.columns and df_parts["Justification"].dtype != object:
+                                    df_parts["Justification"] = df_parts["Justification"].astype(object)
+                                mask = df_parts["Part Name"] == selected_part
+                                df_parts.loc[mask, "Justification"] = ""
+                                save_parts(df_parts)
+                                st.success("Justification removed.")
+                                st.rerun()
 
             # ---------- TAB: NEW ITERATION ----------
             with tab_nova:
@@ -1808,25 +1716,6 @@ elif st.session_state.current_page == "Part Management":
                         key=f"new_desc_{selected_part}"
                     )
 
-                curr_latest_just = str(latest_iter.get("Justification", "")).strip()
-                if curr_latest_just == "nan":
-                    curr_latest_just = ""
-
-                has_just_nova = st.checkbox(
-                    "Include Justification",
-                    value=bool(curr_latest_just),
-                    key=f"cb_has_just_nova_{selected_part}"
-                )
-                if has_just_nova:
-                    nova_just = st.text_area(
-                        "Justification",
-                        value=curr_latest_just,
-                        height=calc_description_height(curr_latest_just),
-                        key=f"new_just_{selected_part}"
-                    )
-                else:
-                    nova_just = ""
-
                 st.divider()
                 st.subheader("Specifications")
                 col_tables, col_img = st.columns([1.5, 1.2])
@@ -1839,11 +1728,6 @@ elif st.session_state.current_page == "Part Management":
 
                     st.markdown("**Tolerances**")
                     raw_tol = parse_tolerancing_data(latest_iter.get('Tolerancing Data', ''))
-                    if not raw_tol:
-                        if is_oem and selected_part in DEFAULT_OEM_TOLERANCES:
-                            raw_tol = DEFAULT_OEM_TOLERANCES[selected_part]
-                        elif not is_oem and selected_part in DEFAULT_CUSTOM_TOLERANCES:
-                            raw_tol = DEFAULT_CUSTOM_TOLERANCES[selected_part]
                     tol_df_nova = pd.DataFrame(raw_tol) if raw_tol else pd.DataFrame([{
                         "Interface / Feature": "", "Nominal (mm)": "", "Fit / Tolerance": "", "Roughness / Notes": ""
                     }])
@@ -1963,7 +1847,15 @@ elif st.session_state.current_page == "Part Management":
                     final_meas = [r for r in edited_meas_nova.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                     final_tol = [r for r in edited_tol_nova.to_dict('records') if str(r.get('Interface / Feature', '')).strip() != ""]
 
-                    saved_just_val = nova_just.strip() if has_just_nova else ""
+                    comp_just = str(latest_iter.get("Justification", "")).strip()
+                    if comp_just == "nan":
+                        comp_just = ""
+
+                    text_cols_save = ["Description", "Specifications", "Tolerancing Data", "Stiffness Data", "LC Images", "Justification", "Image Path"]
+                    for col_name in text_cols_save:
+                        if col_name in df_parts.columns and df_parts[col_name].dtype != object:
+                            df_parts[col_name] = df_parts[col_name].astype(object)
+
                     new_row = {
                         "Subassembly": latest_iter['Subassembly'],
                         "Part Name": selected_part,
@@ -1976,11 +1868,11 @@ elif st.session_state.current_page == "Part Management":
                         "Image Path": img_path,
                         "Stiffness Data": format_stiffness_data(user_stiff_vals) if selected_part == "UP_01" else (json.dumps(user_stiff_vals) if user_stiff_vals else ""),
                         "LC Images": format_lc_images(saved_lc_paths),
-                        "Justification": saved_just_val
+                        "Justification": comp_just
                     }
                     df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                     part_mask = df_parts["Part Name"] == selected_part
-                    df_parts.loc[part_mask, "Justification"] = saved_just_val
+                    df_parts.loc[part_mask, "Justification"] = comp_just
                     save_parts(df_parts)
                     new_idx = df_parts.index[-1]
                     st.session_state[f"pending_edit_{selected_part}"] = new_idx
@@ -2026,25 +1918,6 @@ elif st.session_state.current_page == "Part Management":
                         key=f"edit_desc_{selected_idx}"
                     )
 
-                curr_ver_just = str(row_to_edit.get("Justification", "")).strip()
-                if curr_ver_just == "nan":
-                    curr_ver_just = ""
-
-                has_just = st.checkbox(
-                    "Include Justification",
-                    value=bool(curr_ver_just),
-                    key=f"cb_has_just_{selected_idx}"
-                )
-                if has_just:
-                    edit_just = st.text_area(
-                        "Justification",
-                        value=curr_ver_just,
-                        height=calc_description_height(curr_ver_just),
-                        key=f"edit_just_{selected_idx}"
-                    )
-                else:
-                    edit_just = ""
-
                 st.divider()
                 st.subheader("Specifications")
                 col_tables, col_img = st.columns([1.5, 1.2])
@@ -2062,11 +1935,6 @@ elif st.session_state.current_page == "Part Management":
 
                     st.markdown("**Tolerances**")
                     raw_tol_edit = parse_tolerancing_data(row_to_edit.get('Tolerancing Data', ''))
-                    if not raw_tol_edit:
-                        if is_oem and selected_part in DEFAULT_OEM_TOLERANCES:
-                            raw_tol_edit = DEFAULT_OEM_TOLERANCES[selected_part]
-                        elif not is_oem and selected_part in DEFAULT_CUSTOM_TOLERANCES:
-                            raw_tol_edit = DEFAULT_CUSTOM_TOLERANCES[selected_part]
                     tol_df_edit = pd.DataFrame(raw_tol_edit) if raw_tol_edit else pd.DataFrame([{
                         "Interface / Feature": "", "Nominal (mm)": "", "Fit / Tolerance": "", "Roughness / Notes": ""
                     }])
@@ -2088,6 +1956,7 @@ elif st.session_state.current_page == "Part Management":
                 user_edit_stiff_vals = {}
                 updated_lc_images_pasted = {}
                 curr_lc_images = parse_lc_images(row_to_edit.get("LC Images", ""))
+                curr_struct = parse_structural_data(row_to_edit.get("Stiffness Data", ""))
 
                 if selected_part == "UP_01":
                     st.divider()
@@ -2220,11 +2089,14 @@ elif st.session_state.current_page == "Part Management":
                     final_meas = [r for r in edited_meas_edit.to_dict('records') if str(r.get('Property', '')).strip() != ""]
                     final_tol = [r for r in edited_tol_edit.to_dict('records') if str(r.get('Interface / Feature', '')).strip() != ""]
 
+                    # Ensure text columns have object dtype so string assignment never raises LossySetitemError
+                    text_cols_save = ["Description", "Specifications", "Tolerancing Data", "Stiffness Data", "LC Images", "Justification", "Image Path"]
+                    for col_name in text_cols_save:
+                        if col_name in df_parts.columns and df_parts[col_name].dtype != object:
+                            df_parts[col_name] = df_parts[col_name].astype(object)
+
                     df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
                     df_parts.at[selected_idx, 'Description'] = edit_desc
-                    part_mask = df_parts["Part Name"] == selected_part
-                    saved_edit_just = edit_just.strip() if has_just else ""
-                    df_parts.loc[part_mask, 'Justification'] = saved_edit_just
                     df_parts.at[selected_idx, 'Specifications'] = format_measurements(final_meas)
                     df_parts.at[selected_idx, 'Tolerancing Data'] = format_tolerancing_data(final_tol)
                     if selected_part == "UP_01":

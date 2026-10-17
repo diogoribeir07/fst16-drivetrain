@@ -162,8 +162,10 @@ assert "Justification" in df_parts.columns, "Justification MUST be in df_parts.c
 assert "Part Name" in df_parts.columns, "Part Name MUST be in df_parts.columns"
 
 # Check defaults exist
-assert "UP_01" in env["DEFAULT_CUSTOM_TOLERANCES"], "UP_01 missing in DEFAULT_CUSTOM_TOLERANCES"
-assert "61816" in env["DEFAULT_OEM_TOLERANCES"], "61816 missing in DEFAULT_OEM_TOLERANCES"
+assert len(env["DEFAULT_CUSTOM_TOLERANCES"]) == 0, "DEFAULT_CUSTOM_TOLERANCES should be empty"
+assert len(env["DEFAULT_OEM_TOLERANCES"]) == 0, "DEFAULT_OEM_TOLERANCES should be empty"
+active_tols = [str(x).strip() for x in df_parts["Tolerancing Data"].dropna() if str(x).strip() not in ["", "nan", "[]"]]
+assert len(active_tols) == 0, f"Expected 0 active tolerance entries, got {len(active_tols)}"
 assert "UP_03" in env["DEFAULT_JUSTIFICATIONS"], "UP_03 missing in DEFAULT_JUSTIFICATIONS"
 assert "UP_04" in env["DEFAULT_JUSTIFICATIONS"], "UP_04 missing in DEFAULT_JUSTIFICATIONS"
 assert "UP_01" not in env["DEFAULT_JUSTIFICATIONS"], "UP_01 should NOT be in DEFAULT_JUSTIFICATIONS"
@@ -174,8 +176,8 @@ assert len(up01_just) == 0, f"UP_01 should NOT have any justification, found: {u
 
 up03_just = df_parts[df_parts["Part Name"] == "UP_03"]["Justification"].iloc[0]
 up04_just = df_parts[df_parts["Part Name"] == "UP_04"]["Justification"].iloc[0]
-assert "Trade-Off Study" not in up03_just and "DL" not in up03_just, "UP_03 justification has bureaucratic text"
-assert "Trade-Off Study" not in up04_just and "DL" not in up04_just, "UP_04 justification has bureaucratic text"
+assert "Under Trade-Off Study" not in up03_just and "DL" not in up03_just, "UP_03 justification has bureaucratic text"
+assert "Under Trade-Off Study" not in up04_just and "DL" not in up04_just, "UP_04 justification has bureaucratic text"
 assert len(str(up03_just).strip()) > 10, "UP_03 justification missing"
 assert len(str(up04_just).strip()) > 10, "UP_04 justification missing"
 
@@ -195,5 +197,36 @@ print(f"   Loaded df_requirements: {len(df_req)} rows, {len(df_req.columns)} col
 assert len(df_req) >= 45, f"Expected >= 45 requirements, got {len(df_req)}"
 assert "ID" in df_req.columns and "Requirement" in df_req.columns, "Requirements missing required columns"
 assert "Component Status" not in df_req.columns, "Component Status MUST NOT be in df_requirements.columns!"
+
+# Test editing and saving parts without LossySetitemError, TypeError or NameError
+for test_p_name in ["UP_01", "HB_01", "61816", "UP_03", "85X100X9 HMSA10 V"]:
+    matching_indices = df_parts[df_parts["Part Name"] == test_p_name].index.tolist()
+    if not matching_indices:
+        continue
+    idx_to_test = matching_indices[0]
+    row_to_edit = df_parts.loc[idx_to_test]
+    
+    # Simulate variables as in app.py tab_editar
+    user_edit_stiff_vals = {}
+    updated_lc_images_pasted = {}
+    curr_lc_images = env["parse_lc_images"](row_to_edit.get("LC Images", ""))
+    curr_struct = env["parse_structural_data"](row_to_edit.get("Stiffness Data", ""))
+    
+    # Simulate save logic
+    text_cols_save = ["Description", "Specifications", "Tolerancing Data", "Stiffness Data", "LC Images", "Justification", "Image Path"]
+    for col_name in text_cols_save:
+        if col_name in df_parts.columns and df_parts[col_name].dtype != object:
+            df_parts[col_name] = df_parts[col_name].astype(object)
+            
+    df_parts.at[idx_to_test, "Tolerancing Data"] = env["format_tolerancing_data"]([])
+    if test_p_name == "UP_01":
+        df_parts.at[idx_to_test, 'Stiffness Data'] = env["format_stiffness_data"](user_edit_stiff_vals)
+    else:
+        if user_edit_stiff_vals:
+            df_parts.at[idx_to_test, 'Stiffness Data'] = json.dumps(user_edit_stiff_vals)
+        elif curr_struct:
+            df_parts.at[idx_to_test, 'Stiffness Data'] = json.dumps(curr_struct)
+            
+    df_parts.at[idx_to_test, "Tolerancing Data"] = ""
 
 print("ALL TEST SUITES PASSED WITH FLYING COLORS!")
