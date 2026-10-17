@@ -1,0 +1,501 @@
+import os
+import json
+import pandas as pd
+from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EXCEL_PATH = os.path.join(BASE_DIR, "FST16_Requirements.xlsx")
+
+INITIAL_REQUIREMENTS = [
+    # ---------- TEAM TARGETS ----------
+    {
+        "ID": "DT.TG.01",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The system components (Hub assembly, Upright assembly, Motor, Bearings, Seals and O-rings, Fasteners) shall weigh less than 2.8kg per Drivetrain corner",
+        "Explanation": "Aligned with the vehicle mass target (195 kg)",
+        "Verification": "CAD",
+        "Validation": "Physical Weighing of assembled corner",
+        "Related Parts": "UP_01, HB_01, 61816, 85X100X9 HMSA10 V"
+    },
+    {
+        "ID": "DT.TG.02",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The system shall be able to run at a peak wheel speed of 1650 RPM",
+        "Explanation": "Matches peak DTI motor velocity at minimum planetary gear reduction ratio",
+        "Verification": "CAD and Data Sheets",
+        "Validation": "Meter o carro a rodar motores (cavaletes, pista, banco de potencia)",
+        "Related Parts": "HB_01, 61816, 85X100X9 HMSA10 V, TD"
+    },
+    {
+        "ID": "DT.TG.03",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The Drivetrain shall be compatible with the DTI F-MOT-B motor and its cooling system",
+        "Explanation": "Establishes the physical envelopes to design around the new motor",
+        "Verification": "CAD",
+        "Validation": "Assembly Test",
+        "Related Parts": "UP_01, UP_03, UP_04"
+    },
+    {
+        "ID": "DT.TG.04",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The wheel assembly shall be compatible with the updated planetary gearbox",
+        "Explanation": "Ensures proper gear meshing, bearing alignment, and torque output",
+        "Verification": "CAD",
+        "Validation": "Assembly Test and Post-Test Inspection",
+        "Related Parts": "UP_01, HB_01, TD"
+    },
+    {
+        "ID": "DT.TG.05",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The Drivetrain shall be compatible with 10\" CFRP rims and 10\" Keizer 6 bolts 8\" wide rims.",
+        "Explanation": "Guarantees packaging clearance (min 5 mm by T 2.6.4)",
+        "Verification": "CAD",
+        "Validation": "Assembly test",
+        "Related Parts": "HB_01, UP_01"
+    },
+    {
+        "ID": "DT.TG.06",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The system shall be compatible with the selected brake calipers and disc",
+        "Explanation": "Ensures rigid mounting and clearance for the brake system",
+        "Verification": "CAD",
+        "Validation": "Brake System Installation test",
+        "Related Parts": "UP_01, HB_01"
+    },
+    {
+        "ID": "DT.TG.07",
+        "Category": "Team",
+        "Group": "Targets",
+        "Requirement": "The suspension system must obey to the following compliance values: 0.2 deg/kN Camber compliance, 0.25 deg/kN Toe compliance",
+        "Explanation": "To ensure maximum performance in dynamic events",
+        "Verification": "FEA",
+        "Validation": "With the jig of local stiffness and an adapter on the hub, apply loads with car in vertical stance",
+        "Related Parts": "UP_01, UpperSupport Version"
+    },
+
+    # ---------- TEAM ASSEMBLY ----------
+    {
+        "ID": "DT.A.01",
+        "Category": "Team",
+        "Group": "Assembly",
+        "Requirement": "Full drivetrain disassembly and assembly again shall take 15 minutes with 2 specialized team members",
+        "Explanation": "Ensures rapid repairs",
+        "Verification": "Benchmarked with FST15 service",
+        "Validation": "Timed Disassembly Test in the workshop",
+        "Related Parts": "UP_01, HB_01, HB_02, UpperSupport Version"
+    },
+    {
+        "ID": "DT.A.02",
+        "Category": "Team",
+        "Group": "Assembly",
+        "Requirement": "Gearbox oil drain and fill shall take less than 3 minutes, with rims already removed",
+        "Explanation": "Facilitates rapid lubrication maintenance",
+        "Verification": "Benchmarked with FST15 service",
+        "Validation": "Timed Oil Change Test in the workshop",
+        "Related Parts": "UP_01, UP_02"
+    },
+    {
+        "ID": "DT.A.03",
+        "Category": "Team",
+        "Group": "Assembly",
+        "Requirement": "Static camber angle adjustment shall take 5 min",
+        "Explanation": "Enables static camber changes between runs in a dynamic event",
+        "Verification": "Benchmarked with FST15 service",
+        "Validation": "Timed Wheel Change Test in the workshop",
+        "Related Parts": "UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "DT.A.04",
+        "Category": "Team",
+        "Group": "Assembly",
+        "Requirement": "Disassembly, open for maintenance and assembly drivetrain shall be possible in 30 minutes with 2 specialized team members",
+        "Explanation": "Enables rapid tire swaps",
+        "Verification": "Benchmarked with FST15 service",
+        "Validation": "Timed Wheel Change Test",
+        "Related Parts": "UP_01, HB_01, 61816"
+    },
+    {
+        "ID": "DT.A.05",
+        "Category": "Team",
+        "Group": "Assembly",
+        "Requirement": "Motor disassembly shall be possible without damaging any parts",
+        "Explanation": "Enables motor servicing",
+        "Verification": "Benchmarked with FST15 service",
+        "Validation": "Motor change",
+        "Related Parts": "UP_01, UP_03, UP_04"
+    },
+
+    # ---------- TEAM STRUCTURAL ----------
+    {
+        "ID": "DT.S.01",
+        "Category": "Team",
+        "Group": "Structural",
+        "Requirement": "Proven carry-over structural components shall maintain a minimum structural Factor of Safety of 1.92",
+        "Explanation": "Defined through Pugsley Method: A = vg ; B = g ; C = s; D = min ; E = vs",
+        "Verification": "Analytical and FEA",
+        "Validation": "-",
+        "Related Parts": "UP_01, UpperSupport Version, HB_01"
+    },
+    {
+        "ID": "DT.S.02",
+        "Category": "Team",
+        "Group": "Structural",
+        "Requirement": "Minimum component clearance shall be 2 mm across full wheel travel and steer angle for a ride height of 40mm, a wheel travel of 40mm up and 45mm down, and wheel steering angle 27 deg (inner) and 24 deg (outer) ([-2;1] deg toe variation).",
+        "Explanation": "Prevents mechanical interference, under all wheel possible positions",
+        "Verification": "CAD",
+        "Validation": "Full Articulation Test on car",
+        "Related Parts": "UP_01, UpperSupport Version"
+    },
+    {
+        "ID": "DT.S.03",
+        "Category": "Team",
+        "Group": "Structural",
+        "Requirement": "Minimum clearance between rotating gearbox parts and surrounding housing (upright and hub assemblies) shall be 1.5 mm",
+        "Explanation": "Prevents internal gear-to-upright contact (team requirement is 2mm but 1.5 facilitates design)",
+        "Verification": "CAD",
+        "Validation": "Measure with half the drivetrain assembled",
+        "Related Parts": "UP_01, HB_01, TD"
+    },
+    {
+        "ID": "DT.S.04",
+        "Category": "Team",
+        "Group": "Structural",
+        "Requirement": "All bought components shall be rated to 500km and all designed components shall be rated to 1000km",
+        "Explanation": "Prevents catastrophic failure before ending FST16 competitions",
+        "Verification": "Data Sheet and FEA",
+        "Validation": "Ensaio a fadiga",
+        "Related Parts": "UP_01, HB_01, 61816, 85X100X9 HMSA10 V"
+    },
+
+    # ---------- TEAM PERFORMANCE ----------
+    {
+        "ID": "DT.P.01",
+        "Category": "Team",
+        "Group": "Performance",
+        "Requirement": "It shall be possible to adjust static camber within the range of [-2 deg, 0 deg]",
+        "Explanation": "Allows trackside setup tuning",
+        "Verification": "CAD",
+        "Validation": "Inclinometro",
+        "Related Parts": "UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "DT.P.02",
+        "Category": "Team",
+        "Group": "Performance",
+        "Requirement": "Every rotational assembly components shall have a natural frequency of at least 133Hz",
+        "Explanation": "Keeps structural natural frequency safely above drivetrain rotational parts frequency",
+        "Verification": "FEA",
+        "Validation": "Mesa de vibracao (apenas drivetrain ou carro todo)",
+        "Related Parts": "HB_01, 61816, TD"
+    },
+    {
+        "ID": "DT.P.04",
+        "Category": "Team",
+        "Group": "Performance",
+        "Requirement": "The drivetrain and transmission operating temperature shall remain within [0 deg C, 100 deg C] during continuous dynamic operation",
+        "Explanation": "Keeps bearings, rotary seals, O-rings and gear oil within rated thermal windows",
+        "Verification": "Data Sheet",
+        "Validation": "Heating components individually or all components assembled in temperature controlled oven",
+        "Related Parts": "61816, 85X100X9 HMSA10 V, UP_01"
+    },
+    {
+        "ID": "DT.P.05",
+        "Category": "Team",
+        "Group": "Performance",
+        "Requirement": "Upright suspension points shall conform to VD suspension geometry coordinates within a maximum tolerance of 0.5 mm",
+        "Explanation": "Prevents kinematic deviation from nominal values",
+        "Verification": "Technical Drawing",
+        "Validation": "Scan of the Upright, and confirm real xyz positions",
+        "Related Parts": "UP_01, UpperSupport Version"
+    },
+    {
+        "ID": "DT.P.06",
+        "Category": "Team",
+        "Group": "Performance",
+        "Requirement": "Concentricity between the Drivetrain and Rims/Tires must be maintained within a maximum 0.244 mm",
+        "Explanation": "Prevents wheel assembly rotational eccentricity and imbalance due to mounting method play",
+        "Verification": "Technical Drawing",
+        "Validation": "Measure wheel eccentricity and radial runout while rotating the wheel assembly",
+        "Related Parts": "HB_01, 61816"
+    },
+    {
+        "ID": "DT.P.07",
+        "Category": "Team",
+        "Group": "Performance",
+        "Requirement": "A triangulation of 1D elements that represents the drivetrain must obey to the following compliance values: 0.076 deg/kN Camber compliance, 0.095 deg/kN Toe compliance",
+        "Explanation": "To ensure maximum performance in dynamic events",
+        "Verification": "FEA",
+        "Validation": "With the jig of local stiffness and adapter on the hub, apply loads with car in vertical stance",
+        "Related Parts": "UP_01, HB_01"
+    },
+
+    # ---------- TEAM MANUFACTURING ----------
+    {
+        "ID": "DT.MNF.01",
+        "Category": "Team",
+        "Group": "Manufacturing",
+        "Requirement": "Upright and Hub geometries shall be compatible with the manufacturing capabilities and tooling of available sponsors",
+        "Explanation": "Minimizes possible problem with impossible geometries for the tools of the sponsors",
+        "Verification": "Speak directly to Sponsor",
+        "Validation": "Upon receiving, perform a full inspection of the part geometry",
+        "Related Parts": "UP_01, HB_01"
+    },
+    {
+        "ID": "DT.MNF.02",
+        "Category": "Team",
+        "Group": "Manufacturing",
+        "Requirement": "All specified tolerances on technical drawings must be achievable by the sponsors manufacturing equipment",
+        "Explanation": "Minimizes possible problem with tolerances for the tools of the sponsors",
+        "Verification": "Speak directly to Sponsor",
+        "Validation": "Upon receiving, verify all critical tolerances using precision equipment",
+        "Related Parts": "UP_01, HB_01"
+    },
+
+    # ---------- FSG ACTIVE ----------
+    {
+        "ID": "T 2.5.2",
+        "Category": "FSG",
+        "Group": "Suspension",
+        "Requirement": "All suspension mounting points must be visible at technical inspection, either by direct view or by removing any covers.",
+        "Explanation": "Mandatory technical inspection visibility",
+        "Verification": "CAD / Visual Inspection",
+        "Validation": "Scrutineering check",
+        "Related Parts": "UP_01, UpperSupport Version"
+    },
+    {
+        "ID": "T 2.6.2",
+        "Category": "FSG",
+        "Group": "Wheels",
+        "Requirement": "Wheel lug bolts, drive pegs and studs must be made of steel or titanium. The team must be able to show good engineering practice and providing adequate strength by calculations. Wheel lug bolts, drive pegs and studs must not be hollow.",
+        "Explanation": "Solid steel or titanium fasteners required",
+        "Verification": "Calculations and Data Sheet",
+        "Validation": "Technical inspection",
+        "Related Parts": "HB_01"
+    },
+    {
+        "ID": "T 2.6.4",
+        "Category": "FSG",
+        "Group": "Wheels",
+        "Requirement": "The radial clearance between any non-rotating part and the rim must be at least 5 mm in static condition at any steering angle and any ride height.",
+        "Explanation": "Clearance from rim barrel across all articulation positions",
+        "Verification": "CAD",
+        "Validation": "Physical clearance gauge check",
+        "Related Parts": "UP_01, HB_01"
+    },
+    {
+        "ID": "T 7.1.1",
+        "Category": "FSG",
+        "Group": "Drivetrain",
+        "Requirement": "Movement of the vehicle without a person in the vehicle and with the master switch(es) in the off position must be possible.",
+        "Explanation": "Enables paddock transport with shut off vehicle",
+        "Verification": "CAD and Mechanical Architecture",
+        "Validation": "Vehicle push test",
+        "Related Parts": "HB_01, 61816"
+    },
+    {
+        "ID": "T 7.2.4",
+        "Category": "FSG",
+        "Group": "Cooling / Lube",
+        "Requirement": "Any cooling or lubrication system must be sealed to prevent leakage.",
+        "Explanation": "Fluid containment safety rule",
+        "Verification": "CAD and Seal Selection",
+        "Validation": "Tilt and pressure test",
+        "Related Parts": "85X100X9 HMSA10 V, UP_03, UP_04"
+    },
+    {
+        "ID": "T 7.2.7",
+        "Category": "FSG",
+        "Group": "Cooling / Lube",
+        "Requirement": "All parts of the engine, motor(s) cooling and lubrication system, including their mountings, must be rated for at least 100 deg C or the temperatures the respective fluid may reach, whichever is higher.",
+        "Explanation": "Thermal rating certification",
+        "Verification": "Data Sheet",
+        "Validation": "Thermal test in oven",
+        "Related Parts": "85X100X9 HMSA10 V, UP_03, UP_04"
+    },
+    {
+        "ID": "T 7.3.1",
+        "Category": "FSG",
+        "Group": "Cooling / Lube",
+        "Requirement": "The lowest point of any lubrication system can only be lower than the line between the lowest point of the main hoop and the lowest triangulated chassis member behind the lubrication system if it is protected from hitting the ground by a structure mounted directly to the chassis.",
+        "Explanation": "Ground protection envelope rule",
+        "Verification": "CAD",
+        "Validation": "Scrutineering ground plane check",
+        "Related Parts": "UP_01"
+    },
+    {
+        "ID": "T 7.3.2",
+        "Category": "FSG",
+        "Group": "Shielding",
+        "Requirement": "Exposed rotating final drivetrain parts, such as gears, clutches, chains and belts must be fitted with scatter shields. Scatter shields and their mountings must: Be constructed of non-perforated 2 mm steel or 3 mm aluminium alloy 6061-T6. Be attached with 6mm metric grade 8.8 or stronger and must comply with T 10.1.",
+        "Explanation": "Debris scatter containment",
+        "Verification": "CAD and Material Certs",
+        "Validation": "Scrutineering inspection",
+        "Related Parts": "UP_01"
+    },
+    {
+        "ID": "T 10.1.1",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "Critical fasteners are defined as bolts, nuts, and other fasteners utilized in the primary structure, the (autonomous) steering, (autonomous) brake, driver's harness, suspension systems and those specifically designated as critical fasteners in the respective rule.",
+        "Explanation": "Critical fastener classification",
+        "Verification": "Fastener Schedule",
+        "Validation": "BOM inspection",
+        "Related Parts": "HB_02, UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.1.2",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "All threaded critical fasteners must be steel, at least 4 mm metric grade 8.8 (unmodified OEM parts 3 mm metric grade 8.8), equivalent size or of that specified in the referencing rule, whichever is larger. The strength classification of critical fasteners must be identifiable.",
+        "Explanation": "Minimum bolt grade and metric sizing",
+        "Verification": "BOM and Technical Drawings",
+        "Validation": "Head stamping inspection",
+        "Related Parts": "HB_02, UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.1.3",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "All threaded critical fasteners must be of the type hexagon bolts (ISO 4017, ISO 4014 or equivalent standard) or socket head cap screws (ISO 4762, DIN 7984, ISO 7379 or equivalent standard) including their fine-pitch thread versions.",
+        "Explanation": "Standard bolt geometry types",
+        "Verification": "BOM and Technical Drawings",
+        "Validation": "Visual verification",
+        "Related Parts": "HB_02, UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.1.5",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "For steering and suspension systems, alternative fasteners are allowed if equivalency to T10.1.2 and T10.1.3 can be shown.",
+        "Explanation": "Fastener equivalency justification path",
+        "Verification": "SES / Equivalency Calculations",
+        "Validation": "Scrutineering approval",
+        "Related Parts": "UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.2.1",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "All critical fasteners must be secured from unintentional loosening by the use of positive locking mechanisms.",
+        "Explanation": "Mandatory positive locking for all critical fasteners",
+        "Verification": "Technical Drawings",
+        "Validation": "Scrutineering inspection",
+        "Related Parts": "HB_02, UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.2.2",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "Accepted positive locking: Correctly installed safety wiring; Cotter pins; Nylon lock nuts (ISO 7040/10512/EN 1663 <= 80 deg C); Prevailing torque lock nuts (DIN 980, ISO 7042, jet nuts/K-nuts); Locking plates; Tab washers. Pre-tensioning or adhesives are not considered positive locking.",
+        "Explanation": "Compliant positive locking mechanisms definition",
+        "Verification": "Assembly Drawings",
+        "Validation": "Scrutineering inspection",
+        "Related Parts": "HB_02, UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.2.4",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "A minimum of two full threads must project from any lock nut.",
+        "Explanation": "Thread engagement requirement",
+        "Verification": "CAD and Bolt Sizing",
+        "Validation": "Physical thread protrusion check",
+        "Related Parts": "HB_02, UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.2.5",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "All spherical rod ends and spherical bearings on the steering or suspension system must be in double shear or captured by having a screw/bolt head or washer with an outer diameter that is larger than the spherical bearing housing inner diameter",
+        "Explanation": "Spherical joint pop-out prevention",
+        "Verification": "CAD",
+        "Validation": "Safety washer diameter check",
+        "Related Parts": "UpperSupport Version, UP_01"
+    },
+    {
+        "ID": "T 10.2.6",
+        "Category": "FSG",
+        "Group": "Fasteners",
+        "Requirement": "Adjustable tie-rod/toe-link ends must be constrained with a jam nut to prevent loosening",
+        "Explanation": "Toe link locking requirement",
+        "Verification": "CAD",
+        "Validation": "Physical inspection",
+        "Related Parts": "UP_01"
+    },
+
+    # ---------- FSG NON-CONSTRAINING / INACTIVE ----------
+    {
+        "ID": "T 2.6.1",
+        "Category": "Inactive",
+        "Group": "Wheels",
+        "Requirement": "Any wheel mounting system that uses a single retaining nut must incorporate a physical device to prevent the loosening of both the nut and the wheel",
+        "Explanation": "Does not constrain current design: FST16 uses 4/6-bolt pattern hub rather than single center-lock retaining nut.",
+        "Verification": "Concept Review",
+        "Validation": "Concept validation",
+        "Related Parts": "HB_01"
+    },
+    {
+        "ID": "T 2.6.3",
+        "Category": "Inactive",
+        "Group": "Wheels",
+        "Requirement": "Aluminium wheel nuts may be used, but they must be hard anodized and in pristine condition",
+        "Explanation": "Does not constrain current design: Steel fasteners selected for wheel attachment.",
+        "Verification": "Concept Review",
+        "Validation": "Concept validation",
+        "Related Parts": "HB_01"
+    },
+    {
+        "ID": "T 7.3.2",
+        "Category": "Inactive",
+        "Group": "Shielding",
+        "Requirement": "Exposed rotating final drivetrain parts must be fitted with scatter shields.",
+        "Explanation": "Does not constrain current design: Planetary gearbox is fully enclosed within the sealed upright housing; no exposed chains/belts/gears.",
+        "Verification": "CAD Architecture",
+        "Validation": "Concept validation",
+        "Related Parts": "UP_01"
+    },
+    {
+        "ID": "T 7.3, EV 2.1.3, T 3.15.3",
+        "Category": "Inactive",
+        "Group": "Motor Shielding",
+        "Requirement": "The electric motor shall be enclosed by a scatter shield equivalent to 2 mm non-perforated aluminium 6061-T6, must have finger guards preventing the passage of a 12 mm object, and shall maintain a minimum clearance of 25 mm from the vehicle's rear impact structure",
+        "Explanation": "Does not constrain current design: In-hub motor is contained within the structural upright and wheel rim assembly.",
+        "Verification": "Packaging CAD",
+        "Validation": "Concept validation",
+        "Related Parts": "UP_01, UP_03, UP_04"
+    }
+]
+
+def create_requirements_excel():
+    df = pd.DataFrame(INITIAL_REQUIREMENTS)
+    print(f"Total requirements to write: {len(df)}")
+    with pd.ExcelWriter(EXCEL_PATH, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Data")
+        ws = writer.sheets["Data"]
+        for idx, col in enumerate(df.columns, 1):
+            col_letter = get_column_letter(idx)
+            if col in ["Requirement", "Explanation", "Validation"]:
+                ws.column_dimensions[col_letter].width = 45
+                for row in range(2, len(df) + 2):
+                    ws.cell(row=row, column=idx).alignment = Alignment(wrap_text=True, vertical="top")
+            else:
+                col_lens = [len(str(x)) for x in df[col].dropna()]
+                max_len = max(max(col_lens) if col_lens else 0, len(str(col)))
+                ws.column_dimensions[col_letter].width = max(min(max_len + 4, 30), 12)
+                for row in range(2, len(df) + 2):
+                    ws.cell(row=row, column=idx).alignment = Alignment(horizontal="center", vertical="top")
+        tab = Table(displayName="RequirementsTable", ref=f"A1:{get_column_letter(len(df.columns))}{len(df)+1}")
+        tab.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+        ws.add_table(tab)
+    print(f"Created: {EXCEL_PATH}")
+
+if __name__ == "__main__":
+    create_requirements_excel()
