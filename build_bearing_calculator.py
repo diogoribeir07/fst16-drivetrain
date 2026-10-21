@@ -70,7 +70,7 @@ def create_wheel_bearing_calculator(output_path):
         cell.alignment = align_center
         cell.border = border_all
         
-    db_rows = [['Schaeffler 61816-Y', 'Thin DGBB (Brass Cage)', 80.0, 100.0, 10.0, 90.0, 13.8, 13.8, 0.0, 6.0, 28, 8000, 12300, 500.0, 7.353, 155.0, 45.0, 1.0, 'Selected Baseline'], ['Schaeffler 61816-2RSR', 'Thin DGBB (Rubber Sealed)', 80.0, 100.0, 10.0, 90.0, 13.8, 13.8, 0.0, 6.0, 28, 3100, 3100, 500.0, 7.353, 160.0, 50.0, 1.0, 'Rejected Seal Drag'], ['FAG B71816-C-TPA-P4S-UL', 'Thin ACBB (15-deg Spindle)', 80.0, 100.0, 10.0, 90.0, 14.6, 16.6, 15.0, 6.747, 35, 12000, 19000, 580.0, 75.0, 145.0, 370.0, 18.0, 'Candidate 15-deg'], ['FAG B71816-E-TPA-P4S-UL', 'Thin ACBB (25-deg Light)', 80.0, 100.0, 10.0, 90.0, 13.7, 15.6, 25.0, 7.144, 35, 9500, 15000, 450.0, 121.4, 145.0, 380.0, 18.0, 'Target Upgrade'], ['FAG B71816-E-TPA-P4S-UM', 'Thin ACBB (25-deg Medium)', 80.0, 100.0, 10.0, 90.0, 13.7, 15.6, 25.0, 7.144, 35, 9000, 14000, 520.0, 195.3, 145.0, 410.0, 18.0, 'Candidate Medium'], ['FAG B71816-E-TPA-P4S-UH', 'Thin ACBB (25-deg Heavy)', 80.0, 100.0, 10.0, 90.0, 13.7, 15.6, 25.0, 7.144, 35, 8200, 13000, 590.0, 275.3, 145.0, 440.0, 20.0, 'Candidate Heavy'], ['FAG HCB71816-E-TPA-P4S-UL', 'Hybrid Ceramic ACBB (Si3N4)', 80.0, 100.0, 10.0, 90.0, 9.5, 10.8, 25.0, 7.144, 35, 12000, 18000, 490.0, 135.0, 125.0, 620.0, 24.0, 'Hybrid Ceramic'], ['FAG XCB71816-E-TPA-P4S-UL', 'Cronidur 30 ACBB (F1 Grade)', 80.0, 100.0, 10.0, 90.0, 12.5, 12.0, 25.0, 7.144, 35, 14000, 22000, 550.0, 145.0, 125.0, 1250.0, 26.0, 'Cronidur 30 F1'], ['Schaeffler 61815-Y', 'Thin DGBB (FST15 Inner)', 75.0, 95.0, 10.0, 85.0, 13.7, 13.4, 0.0, 6.0, 26, 8500, 13000, 480.0, 7.1, 140.0, 42.0, 1.0, 'FST15 Baseline'], ['FAG B71815-E-TPA-P4S-UL', 'Thin ACBB (FST15 Stepped)', 75.0, 95.0, 10.0, 85.0, 13.2, 14.8, 25.0, 7.144, 33, 10000, 16000, 430.0, 115.0, 135.0, 360.0, 18.0, 'FST15 Stepped ACBB'], ['Schaeffler 61916', 'Medium Thin DGBB (ISO 19)', 80.0, 110.0, 16.0, 95.0, 26.5, 24.0, 0.0, 10.0, 18, 6700, 8000, 620.0, 12.0, 380.0, 75.0, 2.0, 'Rejected Packaging'], ['FAG B71916-E-TPA-P4S-UL', 'Angular Contact (ISO 19)', 80.0, 110.0, 16.0, 95.0, 33.5, 24.0, 25.0, 10.0, 21, 8500, 13000, 680.0, 185.0, 380.0, 450.0, 20.0, 'Rejected Packaging'], ['Schaeffler 6016', 'Standard DGBB (ISO 02)', 80.0, 125.0, 22.0, 102.5, 51.0, 40.0, 0.0, 14.0, 12, 5600, 6700, 780.0, 18.0, 850.0, 85.0, 2.0, 'Rejected Mass'], ['FAG 7216-B-XL-TVP', 'Standard ACBB (ISO 02)', 80.0, 140.0, 26.0, 110.0, 85.0, 76.5, 40.0, 18.0, 14, 4800, 6300, 1100.0, 320.0, 1450.0, 140.0, 3.0, 'Rejected Mass'], ['FAG 32016-X-XL', 'Tapered Roller Bearing', 80.0, 125.0, 29.0, 102.5, 162.0, 212.0, 14.0, 12.0, 24, 3000, 4300, 2200.0, 850.0, 1250.0, 120.0, 3.0, 'Rejected Mass Friction'], ['FAG 3216-B-TVH', 'Double Row Angular Contact', 80.0, 140.0, 44.4, 110.0, 99.0, 102.0, 32.0, 16.0, 24, 2800, 3800, 1400.0, 420.0, 2450.0, 210.0, 4.0, 'Rejected Road Car Unit'], ['FAG QJ216-XL-MPA', 'Four-Point Contact Ball', 80.0, 140.0, 26.0, 110.0, 136.0, 137.0, 35.0, 18.0, 14, 3400, 5300, 1300.0, 350.0, 1700.0, 260.0, 6.0, 'Rejected Split Ring']]
+    db_rows = [['Schaeffler 61816-Y', 'Thin DGBB (Brass Cage)', 80.0, 100.0, 10.0, 90.0, 13.8, 13.8, 0.0, 6.0, 28, 8000, 12300, 500.0, 7.353, 155.0, 50.0, 1.0, 'Selected Baseline'], ['INA 71816-TN', 'Thin ACBB (40-deg Polyamide)', 80.0, 100.0, 10.0, 90.0, 16.5, 19.1, 40.0, 7.0, 32, 8000, 10000, 520.0, 180.0, 152.0, 300.0, 2.0, 'Target Upgrade'], ['Schaeffler 61816-2RSR', 'Thin DGBB (Rubber Sealed)', 80.0, 100.0, 10.0, 90.0, 13.8, 13.8, 0.0, 6.0, 28, 3100, 3100, 500.0, 7.353, 160.0, 50.0, 1.0, 'Rejected Seal Drag'], ['FAG B71816-C-TPA-P4S-UL', 'Thin ACBB (15-deg Spindle)', 80.0, 100.0, 10.0, 90.0, 14.6, 16.6, 15.0, 6.747, 35, 12000, 19000, 580.0, 75.0, 145.0, 370.0, 18.0, 'Candidate 15-deg'], ['FAG B71816-E-TPA-P4S-UL', 'Thin ACBB (25-deg Light)', 80.0, 100.0, 10.0, 90.0, 13.7, 15.6, 25.0, 7.144, 35, 9500, 15000, 450.0, 121.4, 145.0, 380.0, 18.0, 'Target Upgrade'], ['FAG B71816-E-TPA-P4S-UM', 'Thin ACBB (25-deg Medium)', 80.0, 100.0, 10.0, 90.0, 13.7, 15.6, 25.0, 7.144, 35, 9000, 14000, 520.0, 195.3, 145.0, 410.0, 18.0, 'Candidate Medium'], ['FAG B71816-E-TPA-P4S-UH', 'Thin ACBB (25-deg Heavy)', 80.0, 100.0, 10.0, 90.0, 13.7, 15.6, 25.0, 7.144, 35, 8200, 13000, 590.0, 275.3, 145.0, 440.0, 20.0, 'Candidate Heavy'], ['FAG HCB71816-E-TPA-P4S-UL', 'Hybrid Ceramic ACBB (Si3N4)', 80.0, 100.0, 10.0, 90.0, 9.5, 10.8, 25.0, 7.144, 35, 12000, 18000, 490.0, 135.0, 125.0, 620.0, 24.0, 'Hybrid Ceramic'], ['FAG XCB71816-E-TPA-P4S-UL', 'Cronidur 30 ACBB (F1 Grade)', 80.0, 100.0, 10.0, 90.0, 12.5, 12.0, 25.0, 7.144, 35, 14000, 22000, 550.0, 145.0, 125.0, 1250.0, 26.0, 'Cronidur 30 F1'], ['Schaeffler 61815-Y', 'Thin DGBB (FST15 Inner)', 75.0, 95.0, 10.0, 85.0, 13.7, 13.4, 0.0, 6.0, 26, 8500, 13000, 480.0, 7.1, 140.0, 42.0, 1.0, 'FST15 Baseline'], ['FAG B71815-E-TPA-P4S-UL', 'Thin ACBB (FST15 Stepped)', 75.0, 95.0, 10.0, 85.0, 13.2, 14.8, 25.0, 7.144, 33, 10000, 16000, 430.0, 115.0, 135.0, 360.0, 18.0, 'FST15 Stepped ACBB'], ['Schaeffler 61916', 'Medium Thin DGBB (ISO 19)', 80.0, 110.0, 16.0, 95.0, 26.5, 24.0, 0.0, 10.0, 18, 6700, 8000, 620.0, 12.0, 380.0, 75.0, 2.0, 'Rejected Packaging'], ['FAG B71916-E-TPA-P4S-UL', 'Angular Contact (ISO 19)', 80.0, 110.0, 16.0, 95.0, 33.5, 24.0, 25.0, 10.0, 21, 8500, 13000, 680.0, 185.0, 380.0, 450.0, 20.0, 'Rejected Packaging'], ['Schaeffler 6016', 'Standard DGBB (ISO 02)', 80.0, 125.0, 22.0, 102.5, 51.0, 40.0, 0.0, 14.0, 12, 5600, 6700, 780.0, 18.0, 850.0, 85.0, 2.0, 'Rejected Mass'], ['FAG 7216-B-XL-TVP', 'Standard ACBB (ISO 02)', 80.0, 140.0, 26.0, 110.0, 85.0, 76.5, 40.0, 18.0, 14, 4800, 6300, 1100.0, 320.0, 1450.0, 140.0, 3.0, 'Rejected Mass'], ['FAG 32016-X-XL', 'Tapered Roller Bearing', 80.0, 125.0, 29.0, 102.5, 162.0, 212.0, 14.0, 12.0, 24, 3000, 4300, 2200.0, 850.0, 1250.0, 120.0, 3.0, 'Rejected Mass Friction'], ['FAG 3216-B-TVH', 'Double Row Angular Contact', 80.0, 140.0, 44.4, 110.0, 99.0, 102.0, 32.0, 16.0, 24, 2800, 3800, 1400.0, 420.0, 2450.0, 210.0, 4.0, 'Rejected Road Car Unit'], ['FAG QJ216-XL-MPA', 'Four-Point Contact Ball', 80.0, 140.0, 26.0, 110.0, 136.0, 137.0, 35.0, 18.0, 14, 3400, 5300, 1300.0, 350.0, 1700.0, 260.0, 6.0, 'Rejected Split Ring']]
     
     for r_idx, row_data in enumerate(db_rows, 4):
         ws_db.row_dimensions[r_idx].height = 20
@@ -160,9 +160,9 @@ def create_wheel_bearing_calculator(output_path):
     cell_outer.alignment = align_center
     cell_outer.border = border_all
     
-    ws_calc.cell(row=r_outer, column=4, value='=VLOOKUP(C' + str(r_outer) + ', Bearing_Database!A4:S20, 2, FALSE)').font = normal_font
+    ws_calc.cell(row=r_outer, column=4, value='=VLOOKUP(C' + str(r_outer) + ', Bearing_Database!A4:S25, 2, FALSE)').font = normal_font
     ws_calc.cell(row=r_outer, column=4).border = border_all
-    ws_calc.cell(row=r_outer, column=5, value='="Bore: " & VLOOKUP(C' + str(r_outer) + ', Bearing_Database!A4:S20, 3, FALSE) & " mm | Angle: " & VLOOKUP(C' + str(r_outer) + ', Bearing_Database!A4:S20, 9, FALSE) & " deg"').font = note_font
+    ws_calc.cell(row=r_outer, column=5, value='="Bore: " & VLOOKUP(C' + str(r_outer) + ', Bearing_Database!A4:S25, 3, FALSE) & " mm | Angle: " & VLOOKUP(C' + str(r_outer) + ', Bearing_Database!A4:S25, 9, FALSE) & " deg"').font = note_font
     ws_calc.cell(row=r_outer, column=5).border = border_all
     current_row += 1
     
@@ -176,9 +176,9 @@ def create_wheel_bearing_calculator(output_path):
     cell_inner.alignment = align_center
     cell_inner.border = border_all
     
-    ws_calc.cell(row=r_inner, column=4, value='=VLOOKUP(C' + str(r_inner) + ', Bearing_Database!A4:S20, 2, FALSE)').font = normal_font
+    ws_calc.cell(row=r_inner, column=4, value='=VLOOKUP(C' + str(r_inner) + ', Bearing_Database!A4:S25, 2, FALSE)').font = normal_font
     ws_calc.cell(row=r_inner, column=4).border = border_all
-    ws_calc.cell(row=r_inner, column=5, value='="Bore: " & VLOOKUP(C' + str(r_inner) + ', Bearing_Database!A4:S20, 3, FALSE) & " mm | Angle: " & VLOOKUP(C' + str(r_inner) + ', Bearing_Database!A4:S20, 9, FALSE) & " deg"').font = note_font
+    ws_calc.cell(row=r_inner, column=5, value='="Bore: " & VLOOKUP(C' + str(r_inner) + ', Bearing_Database!A4:S25, 3, FALSE) & " mm | Angle: " & VLOOKUP(C' + str(r_inner) + ', Bearing_Database!A4:S25, 9, FALSE) & " deg"').font = note_font
     ws_calc.cell(row=r_inner, column=5).border = border_all
     current_row += 2
 
@@ -265,14 +265,14 @@ def create_wheel_bearing_calculator(output_path):
     
     ws_calc.cell(row=r_aout, column=2, value="Outer Pressure Apex Distance (a_out)").font = normal_font
     ws_calc.cell(row=r_aout, column=2).border = border_all
-    c = ws_calc.cell(row=r_aout, column=3, value=f'=IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE)>0, (VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE)/2)*TAN(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE))), 0)')
+    c = ws_calc.cell(row=r_aout, column=3, value=f'=IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE)>0, (VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE)/2)*TAN(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE))), 0)')
     c.font = normal_font; c.alignment = align_right; c.number_format = "0.00"; c.border = border_all
     ws_calc.cell(row=r_aout, column=4, value="mm").font = normal_font; ws_calc.cell(row=r_aout, column=4).border = border_all; ws_calc.cell(row=r_aout, column=4).alignment = align_center
     ws_calc.cell(row=r_aout, column=5, value="a_out = (dm/2)*tan(alpha)").font = note_font; ws_calc.cell(row=r_aout, column=5).border = border_all
 
     ws_calc.cell(row=r_ain, column=2, value="Inner Pressure Apex Distance (a_in)").font = normal_font
     ws_calc.cell(row=r_ain, column=2).border = border_all
-    c = ws_calc.cell(row=r_ain, column=3, value=f'=IF(VLOOKUP(C{r_inner}, Bearing_Database!A4:S20, 9, FALSE)>0, (VLOOKUP(C{r_inner}, Bearing_Database!A4:S20, 6, FALSE)/2)*TAN(RADIANS(VLOOKUP(C{r_inner}, Bearing_Database!A4:S20, 9, FALSE))), 0)')
+    c = ws_calc.cell(row=r_ain, column=3, value=f'=IF(VLOOKUP(C{r_inner}, Bearing_Database!A4:S25, 9, FALSE)>0, (VLOOKUP(C{r_inner}, Bearing_Database!A4:S25, 6, FALSE)/2)*TAN(RADIANS(VLOOKUP(C{r_inner}, Bearing_Database!A4:S25, 9, FALSE))), 0)')
     c.font = normal_font; c.alignment = align_right; c.number_format = "0.00"; c.border = border_all
     ws_calc.cell(row=r_ain, column=4, value="mm").font = normal_font; ws_calc.cell(row=r_ain, column=4).border = border_all; ws_calc.cell(row=r_ain, column=4).alignment = align_center
     ws_calc.cell(row=r_ain, column=5, value="a_in = (dm/2)*tan(alpha)").font = note_font; ws_calc.cell(row=r_ain, column=5).border = border_all
@@ -324,9 +324,9 @@ def create_wheel_bearing_calculator(output_path):
     r_p0 = current_row
     ws_calc.cell(row=r_p0, column=2, value="Equivalent Static Load (P0)").font = bold_font
     ws_calc.cell(row=r_p0, column=2).border = border_all
-    c_p0_out = ws_calc.cell(row=r_p0, column=3, value=f'=IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE)>0, MAX(C{r_frout}, 0.5*C{r_frout}+0.38*C{r_fa}), MAX(C{r_frout}, 0.6*C{r_frout}+0.5*C{r_fa}))')
+    c_p0_out = ws_calc.cell(row=r_p0, column=3, value=f'=IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE)>0, MAX(C{r_frout}, 0.5*C{r_frout}+0.38*C{r_fa}), MAX(C{r_frout}, 0.6*C{r_frout}+0.5*C{r_fa}))')
     c_p0_out.font = bold_font; c_p0_out.alignment = align_right; c_p0_out.number_format = "#,##0.0"; c_p0_out.border = border_all
-    c_p0_in = ws_calc.cell(row=r_p0, column=4, value=f'=IF(VLOOKUP(C{r_inner}, Bearing_Database!A4:S20, 9, FALSE)>0, MAX(C{r_frin}, 0.5*C{r_frin}+0.38*C{r_fa}), MAX(C{r_frin}, 0.6*C{r_frin}+0.5*C{r_fa}))')
+    c_p0_in = ws_calc.cell(row=r_p0, column=4, value=f'=IF(VLOOKUP(C{r_inner}, Bearing_Database!A4:S25, 9, FALSE)>0, MAX(C{r_frin}, 0.5*C{r_frin}+0.38*C{r_fa}), MAX(C{r_frin}, 0.6*C{r_frin}+0.5*C{r_fa}))')
     c_p0_in.font = bold_font; c_p0_in.alignment = align_right; c_p0_in.number_format = "#,##0.0"; c_p0_in.border = border_all
     ws_calc.cell(row=r_p0, column=5, value="N").font = normal_font; ws_calc.cell(row=r_p0, column=5).alignment = align_center; ws_calc.cell(row=r_p0, column=5).border = border_all
     ws_calc.cell(row=r_p0, column=6, value="ISO 76 static equivalent load").font = note_font; ws_calc.cell(row=r_p0, column=6).border = border_all
@@ -336,9 +336,9 @@ def create_wheel_bearing_calculator(output_path):
     r_s0 = current_row
     ws_calc.cell(row=r_s0, column=2, value="Static Safety Factor (S0 = C0r / P0)").font = bold_font
     ws_calc.cell(row=r_s0, column=2).border = border_all
-    c_s0_out = ws_calc.cell(row=r_s0, column=3, value=f'=(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 8, FALSE)*1000)/C{r_p0}')
+    c_s0_out = ws_calc.cell(row=r_s0, column=3, value=f'=(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 8, FALSE)*1000)/C{r_p0}')
     c_s0_out.font = bold_font; c_s0_out.fill = result_fill; c_s0_out.alignment = align_right; c_s0_out.number_format = "0.00"; c_s0_out.border = border_result
-    c_s0_in = ws_calc.cell(row=r_s0, column=4, value=f'=(VLOOKUP(C{r_inner}, Bearing_Database!A4:S20, 8, FALSE)*1000)/D{r_p0}') # Fixed: references D{r_p0}
+    c_s0_in = ws_calc.cell(row=r_s0, column=4, value=f'=(VLOOKUP(C{r_inner}, Bearing_Database!A4:S25, 8, FALSE)*1000)/D{r_p0}') # Fixed: references D{r_p0}
     c_s0_in.font = bold_font; c_s0_in.fill = result_fill; c_s0_in.alignment = align_right; c_s0_in.number_format = "0.00"; c_s0_in.border = border_result
     ws_calc.cell(row=r_s0, column=5, value="ratio").font = normal_font; ws_calc.cell(row=r_s0, column=5).alignment = align_center; ws_calc.cell(row=r_s0, column=5).border = border_all
     ws_calc.cell(row=r_s0, column=6, value="Target S0 >= 1.5 (Green >= 1.5, Yellow 1.0-1.5, Red < 1.0)").font = note_font; ws_calc.cell(row=r_s0, column=6).border = border_all
@@ -373,9 +373,9 @@ def create_wheel_bearing_calculator(output_path):
     r_l10h = current_row
     ws_calc.cell(row=r_l10h, column=2, value="Basic Rating Fatigue Life (L10h)").font = bold_font
     ws_calc.cell(row=r_l10h, column=2).border = border_all
-    c_l10h_out = ws_calc.cell(row=r_l10h, column=3, value=f'=(10^6/(60*C{r_nwheel})) * ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 7, FALSE)*1000)/C{r_peq})^3')
+    c_l10h_out = ws_calc.cell(row=r_l10h, column=3, value=f'=(10^6/(60*C{r_nwheel})) * ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 7, FALSE)*1000)/C{r_peq})^3')
     c_l10h_out.font = bold_font; c_l10h_out.fill = result_fill; c_l10h_out.alignment = align_right; c_l10h_out.number_format = "#,##0.0"; c_l10h_out.border = border_result
-    c_l10h_in = ws_calc.cell(row=r_l10h, column=4, value=f'=(10^6/(60*C{r_nwheel})) * ((VLOOKUP(C{r_inner}, Bearing_Database!A4:S20, 7, FALSE)*1000)/D{r_peq})^3') # Fixed: references D{r_peq}
+    c_l10h_in = ws_calc.cell(row=r_l10h, column=4, value=f'=(10^6/(60*C{r_nwheel})) * ((VLOOKUP(C{r_inner}, Bearing_Database!A4:S25, 7, FALSE)*1000)/D{r_peq})^3') # Fixed: references D{r_peq}
     c_l10h_in.font = bold_font; c_l10h_in.fill = result_fill; c_l10h_in.alignment = align_right; c_l10h_in.number_format = "#,##0.0"; c_l10h_in.border = border_result
     ws_calc.cell(row=r_l10h, column=5, value="Hours").font = normal_font; ws_calc.cell(row=r_l10h, column=5).alignment = align_center; ws_calc.cell(row=r_l10h, column=5).border = border_all
     ws_calc.cell(row=r_l10h, column=6, value="L10h = (10^6 / (60*n)) * (Cr / Peq)^3").font = note_font; ws_calc.cell(row=r_l10h, column=6).border = border_all
@@ -404,7 +404,7 @@ def create_wheel_bearing_calculator(output_path):
     r_ctilt = current_row
     ws_calc.cell(row=r_ctilt, column=2, value="Angular Camber Stiffness (c_tilt)").font = bold_font
     ws_calc.cell(row=r_ctilt, column=2).border = border_all
-    c = ws_calc.cell(row=r_ctilt, column=3, value=f'=0.5 * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 14, FALSE)*1000000) * ((C{r_h}/1000)^2) * (PI()/180)')
+    c = ws_calc.cell(row=r_ctilt, column=3, value=f'=0.5 * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 14, FALSE)*1000000) * ((C{r_h}/1000)^2) * (PI()/180)')
     c.font = bold_font; c.fill = result_fill; c.alignment = align_right; c.number_format = "#,##0.0"; c.border = border_result
     ws_calc.cell(row=r_ctilt, column=4, value="N*m / deg").font = bold_font; ws_calc.cell(row=r_ctilt, column=4).border = border_all; ws_calc.cell(row=r_ctilt, column=4).alignment = align_center
     ws_calc.cell(row=r_ctilt, column=5, value="c_tilt = 0.5 * Kr * H^2 (N*m/rad converted to N*m/deg)").font = note_font; ws_calc.cell(row=r_ctilt, column=5).border = border_all
@@ -453,8 +453,8 @@ def create_wheel_bearing_calculator(output_path):
     preload_formula = (
         f'=IF(ISNUMBER(SEARCH("-UH", C{r_outer})), 712, '
         f'IF(ISNUMBER(SEARCH("-UM", C{r_outer})), 302, '
-        f'IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE)>0, 84, '
-        f'(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 15, FALSE)*1000)*0.100)))'
+        f'IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE)>0, 84, '
+        f'(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 15, FALSE)*1000)*0.100)))'
     )
     c = ws_calc.cell(row=r_fpreload, column=3, value=preload_formula)
     c.font = bold_font; c.alignment = align_right; c.number_format = "#,##0.0"; c.border = border_all
@@ -579,7 +579,7 @@ def create_wheel_bearing_calculator(output_path):
     r_ndm = current_row
     ws_calc.cell(row=r_ndm, column=2, value="Speed Parameter (n * dm)").font = bold_font
     ws_calc.cell(row=r_ndm, column=2).border = border_all
-    c = ws_calc.cell(row=r_ndm, column=3, value=f'=C{r_nwheel} * VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE)')
+    c = ws_calc.cell(row=r_ndm, column=3, value=f'=C{r_nwheel} * VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE)')
     c.font = bold_font; c.alignment = align_right; c.number_format = "#,##0"; c.border = border_all
     ws_calc.cell(row=r_ndm, column=4, value="mm*rpm").font = normal_font; ws_calc.cell(row=r_ndm, column=4).border = border_all; ws_calc.cell(row=r_ndm, column=4).alignment = align_center
     ws_calc.cell(row=r_ndm, column=5, value="n * dm (Catalog limit: 1,000,000)").font = note_font; ws_calc.cell(row=r_ndm, column=5).border = border_all
@@ -588,7 +588,7 @@ def create_wheel_bearing_calculator(output_path):
     r_nc = current_row
     ws_calc.cell(row=r_nc, column=2, value="Cage Orbital Speed (nc)").font = normal_font
     ws_calc.cell(row=r_nc, column=2).border = border_all
-    c = ws_calc.cell(row=r_nc, column=3, value=f'=(C{r_nwheel}/2) * (1 - (VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)/VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE))*COS(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE))))')
+    c = ws_calc.cell(row=r_nc, column=3, value=f'=(C{r_nwheel}/2) * (1 - (VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)/VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE))*COS(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE))))')
     c.font = normal_font; c.alignment = align_right; c.number_format = "#,##0.0"; c.border = border_all
     ws_calc.cell(row=r_nc, column=4, value="rpm").font = normal_font; ws_calc.cell(row=r_nc, column=4).border = border_all; ws_calc.cell(row=r_nc, column=4).alignment = align_center
     ws_calc.cell(row=r_nc, column=5, value="nc = (n/2) * (1 - (Dw/dm)*cos(alpha))").font = note_font; ws_calc.cell(row=r_nc, column=5).border = border_all
@@ -597,7 +597,7 @@ def create_wheel_bearing_calculator(output_path):
     r_nb = current_row
     ws_calc.cell(row=r_nb, column=2, value="Ball Spin Speed (nb)").font = normal_font
     ws_calc.cell(row=r_nb, column=2).border = border_all
-    c = ws_calc.cell(row=r_nb, column=3, value=f'=(C{r_nwheel}/2) * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE)/VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)) * (1 - ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)/VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE))*COS(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE))))^2)')
+    c = ws_calc.cell(row=r_nb, column=3, value=f'=(C{r_nwheel}/2) * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE)/VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)) * (1 - ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)/VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE))*COS(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE))))^2)')
     c.font = normal_font; c.alignment = align_right; c.number_format = "#,##0.0"; c.border = border_all
     ws_calc.cell(row=r_nb, column=4, value="rpm").font = normal_font; ws_calc.cell(row=r_nb, column=4).border = border_all; ws_calc.cell(row=r_nb, column=4).alignment = align_center
     ws_calc.cell(row=r_nb, column=5, value="Ball rotational speed around its own axis").font = note_font; ws_calc.cell(row=r_nb, column=5).border = border_all
@@ -607,7 +607,7 @@ def create_wheel_bearing_calculator(output_path):
     ws_calc.cell(row=r_fc, column=2, value="Ball Centrifugal Force (Fc)").font = normal_font
     ws_calc.cell(row=r_fc, column=2).border = border_all
     # Correct formula: Fc = m_ball * r_orbital * omega_c^2 (no extraneous 0.5)
-    c = ws_calc.cell(row=r_fc, column=3, value=f'=((4/3)*PI()*((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)/2000)^3)*7800) * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE)/2000) * ((2*PI()*C{r_nc}/60)^2)')
+    c = ws_calc.cell(row=r_fc, column=3, value=f'=((4/3)*PI()*((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)/2000)^3)*7800) * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE)/2000) * ((2*PI()*C{r_nc}/60)^2)')
     c.font = normal_font; c.alignment = align_right; c.number_format = "0.000"; c.border = border_all
     ws_calc.cell(row=r_fc, column=4, value="N").font = normal_font; ws_calc.cell(row=r_fc, column=4).border = border_all; ws_calc.cell(row=r_fc, column=4).alignment = align_center
     ws_calc.cell(row=r_fc, column=5, value="Centrifugal force per rolling element Fc = m * r * omega^2").font = note_font; ws_calc.cell(row=r_fc, column=5).border = border_all
@@ -618,7 +618,7 @@ def create_wheel_bearing_calculator(output_path):
     ws_calc.cell(row=r_mg, column=2).border = border_all
     # Mg = Jb * omega_b * omega_c * sin(alpha) in N*mm
     # Jb = 0.1 * m * Dw^2
-    mg_formula = f'=(0.1 * ((4/3)*PI()*((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)/2000)^3)*7800) * ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)/1000)^2)) * (2*PI()*C{r_nb}/60) * (2*PI()*C{r_nc}/60) * SIN(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE))) * 1000'
+    mg_formula = f'=(0.1 * ((4/3)*PI()*((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)/2000)^3)*7800) * ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)/1000)^2)) * (2*PI()*C{r_nb}/60) * (2*PI()*C{r_nc}/60) * SIN(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE))) * 1000'
     c = ws_calc.cell(row=r_mg, column=3, value=mg_formula)
     c.font = normal_font; c.alignment = align_right; c.number_format = "0.0000"; c.border = border_all
     ws_calc.cell(row=r_mg, column=4, value="N*mm").font = normal_font; ws_calc.cell(row=r_mg, column=4).border = border_all; ws_calc.cell(row=r_mg, column=4).alignment = align_center
@@ -629,7 +629,7 @@ def create_wheel_bearing_calculator(output_path):
     ws_calc.cell(row=r_antiskid, column=2, value="Anti-Skid Preload Threshold (Fa_skid)").font = bold_font
     ws_calc.cell(row=r_antiskid, column=2).border = border_all
     # For ACBB: Z * (Mg_Nm / (r_ball * mu)) * sin(alpha). For DGBB: 0.01 * C0r
-    antiskid_formula = f'=IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE)>0, VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 11, FALSE) * ((C{r_mg}/1000) / ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 10, FALSE)/2000) * 0.06)) * SIN(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE))), 0.01 * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 8, FALSE)*1000))'
+    antiskid_formula = f'=IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE)>0, VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 11, FALSE) * ((C{r_mg}/1000) / ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 10, FALSE)/2000) * 0.06)) * SIN(RADIANS(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE))), 0.01 * (VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 8, FALSE)*1000))'
     c = ws_calc.cell(row=r_antiskid, column=3, value=antiskid_formula)
     c.font = bold_font; c.alignment = align_right; c.number_format = "#,##0.0"; c.border = border_all
     ws_calc.cell(row=r_antiskid, column=4, value="N").font = normal_font; ws_calc.cell(row=r_antiskid, column=4).border = border_all; ws_calc.cell(row=r_antiskid, column=4).alignment = align_center
@@ -656,7 +656,7 @@ def create_wheel_bearing_calculator(output_path):
     r_nu1 = current_row
     ws_calc.cell(row=r_nu1, column=2, value="Reference Viscosity for Full Film (nu1)").font = normal_font
     ws_calc.cell(row=r_nu1, column=2).border = border_all
-    c = ws_calc.cell(row=r_nu1, column=3, value=f'=45000 * (C{r_nwheel}^(-0.83)) * ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 6, FALSE))^(-0.5))')
+    c = ws_calc.cell(row=r_nu1, column=3, value=f'=45000 * (C{r_nwheel}^(-0.83)) * ((VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 6, FALSE))^(-0.5))')
     c.font = normal_font; c.alignment = align_right; c.number_format = "0.0"; c.border = border_all
     ws_calc.cell(row=r_nu1, column=4, value="mm^2/s").font = normal_font; ws_calc.cell(row=r_nu1, column=4).border = border_all; ws_calc.cell(row=r_nu1, column=4).alignment = align_center
     ws_calc.cell(row=r_nu1, column=5, value="nu1 = 45000 * n^(-0.83) * dm^(-0.5) (ISO 281)").font = note_font; ws_calc.cell(row=r_nu1, column=5).border = border_all
@@ -711,8 +711,8 @@ def create_wheel_bearing_calculator(output_path):
         c_fro.font = normal_font; c_fro.alignment = align_right; c_fro.number_format = "#,##0.0"; c_fro.border = border_all
         
         # S0_outer = C0r / P0
-        p0_expr = f'IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 9, FALSE)>0, MAX(E{r}, 0.5*E{r}+0.38*ABS(C{r})), MAX(E{r}, 0.6*E{r}+0.5*ABS(C{r})))'
-        c_s0 = ws_calc.cell(row=r, column=6, value=f'=(VLOOKUP(C{r_outer}, Bearing_Database!A4:S20, 8, FALSE)*1000)/({p0_expr})')
+        p0_expr = f'IF(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 9, FALSE)>0, MAX(E{r}, 0.5*E{r}+0.38*ABS(C{r})), MAX(E{r}, 0.6*E{r}+0.5*ABS(C{r})))'
+        c_s0 = ws_calc.cell(row=r, column=6, value=f'=(VLOOKUP(C{r_outer}, Bearing_Database!A4:S25, 8, FALSE)*1000)/({p0_expr})')
         c_s0.font = bold_font; c_s0.alignment = align_right; c_s0.number_format = "0.00"; c_s0.border = border_all
         
         # Evaluation in column 7

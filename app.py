@@ -1055,6 +1055,8 @@ if st.session_state.current_page == "Wheel Assembly":
         with col2:
             asm_versions_curr = df_assemblies["Assembly Version"].tolist()
             default_curr_idx = len(asm_versions_curr) - 1 if len(asm_versions_curr) > 1 else 0
+            if default_curr_idx == default_ref_idx and len(asm_versions_curr) > 1:
+                default_curr_idx = 0
             selected_asm_v = st.selectbox("Evaluate Assembly", asm_versions_curr, index=default_curr_idx)
             
         ref_row = df_assemblies[df_assemblies["Assembly Version"] == ref_asm_v].iloc[0]
@@ -1111,6 +1113,12 @@ if st.session_state.current_page == "Wheel Assembly":
         if not ref_parts_df.empty: all_displayed_parts.update(ref_parts_df["Part Name"].astype(str).tolist())
         if not selected_parts_df.empty: all_displayed_parts.update(selected_parts_df["Part Name"].astype(str).tolist())
         
+        col_in_ref = f"In {ref_asm_v}"
+        col_in_curr = f"In {selected_asm_v}"
+        if col_in_ref == col_in_curr:
+            col_in_ref = f"In {ref_asm_v} (Ref)"
+            col_in_curr = f"In {selected_asm_v} (Eval)"
+
         for p_name in sorted(list(all_displayed_parts)):
             if not ref_parts_df.empty and str(p_name) in ref_parts_df["Part Name"].astype(str).values:
                 orig_weight = ref_parts_df[ref_parts_df["Part Name"].astype(str) == str(p_name)].iloc[0]["Weight (g)"]
@@ -1138,8 +1146,8 @@ if st.session_state.current_page == "Wheel Assembly":
             dashboard_data.append({
                 "Subassembly": subassembly,
                 "Part Name": p_name,
-                f"In {ref_asm_v}": in_ref,
-                f"In {selected_asm_v}": in_curr,
+                col_in_ref: in_ref,
+                col_in_curr: in_curr,
                 "Ref. Weight (g)": orig_weight,
                 "Current Weight (g)": curr_weight,
                 "Diff (g)": diff
@@ -1147,9 +1155,9 @@ if st.session_state.current_page == "Wheel Assembly":
             
         dash_df = pd.DataFrame(dashboard_data, columns=[
             "Subassembly", "Part Name", 
-            f"In {ref_asm_v}", f"In {selected_asm_v}", 
+            col_in_ref, col_in_curr, 
             "Ref. Weight (g)", "Current Weight (g)", "Diff (g)"
-        ])
+        ]).reset_index(drop=True)
         
         total_curr = dash_df["Current Weight (g)"].sum() if not dash_df.empty else 0.0
         total_orig = dash_df["Ref. Weight (g)"].sum() if not dash_df.empty else 0.0
@@ -1210,18 +1218,28 @@ if st.session_state.current_page == "Wheel Assembly":
                 st.markdown("#### Part Configuration")
                 
                 new_config = {}
-                unique_parts = df_parts["Part Name"].unique() if not df_parts.empty else []
+                unique_parts = df_parts["Part Name"].unique().tolist() if not df_parts.empty else []
                 
                 bearings_list = []
                 seals_list = []
                 custom_parts = []
                 
                 if not df_parts.empty:
-                    bearings_list = df_parts[df_parts["Description"].astype(str).str.contains("Schaeffler", na=False)]["Part Name"].unique().tolist()
-                    seals_list = df_parts[df_parts["Description"].astype(str).str.contains("SKF", na=False)]["Part Name"].unique().tolist()
+                    oem_mask = df_parts["Subassembly"].astype(str) == "Other"
+                    oem_parts_names = df_parts[oem_mask]["Part Name"].unique().tolist()
                     
+                    for p in oem_parts_names:
+                        p_str = str(p).upper()
+                        row_match = df_parts[df_parts["Part Name"].astype(str) == str(p)]
+                        desc_str = str(row_match.iloc[0].get("Description", "")).upper() if not row_match.empty else ""
+                        
+                        if "HMSA" in p_str or "SEAL" in p_str or "SKF" in desc_str or "SEAL" in desc_str or ("X" in p_str and any(c.isdigit() for c in p_str)):
+                            seals_list.append(str(p))
+                        else:
+                            bearings_list.append(str(p))
+                            
                     for p in unique_parts:
-                        if p not in bearings_list and p not in seals_list:
+                        if str(p) not in oem_parts_names:
                             custom_parts.append(p)
                 
                 if len(custom_parts) > 0:
@@ -1249,9 +1267,20 @@ if st.session_state.current_page == "Wheel Assembly":
                 existing_outer = base_config.get("Outer Bearing", "-- Not Used --")
                 existing_seal = base_config.get("Seal", "-- Not Used --")
                 
-                idx_in = b_opts.index(existing_inner) if existing_inner in b_opts else 0
-                idx_out = b_opts.index(existing_outer) if existing_outer in b_opts else 0
-                idx_s = s_opts.index(existing_seal) if existing_seal in s_opts else 0
+                def match_oem_opt(val, options):
+                    if not val or val == "-- Not Used --":
+                        return 0
+                    if val in options:
+                        return options.index(val)
+                    for idx_o, opt_val in enumerate(options):
+                        if opt_val != "-- Not Used --":
+                            if opt_val in val or val in opt_val:
+                                return idx_o
+                    return 0
+
+                idx_in = match_oem_opt(existing_inner, b_opts)
+                idx_out = match_oem_opt(existing_outer, b_opts)
+                idx_s = match_oem_opt(existing_seal, s_opts)
                 
                 sel_inner = st.selectbox("Inner Bearing", b_opts, index=idx_in)
                 sel_outer = st.selectbox("Outer Bearing", b_opts, index=idx_out)
