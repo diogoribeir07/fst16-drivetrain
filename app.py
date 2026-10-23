@@ -2,11 +2,14 @@ import streamlit as st
 import pandas as pd
 import os
 import io
+import re
 import math
 import json
 import time
+import tempfile
+import subprocess
 from datetime import datetime
-from PIL import Image
+from PIL import Image, ImageOps
 try:
     from PIL import ImageGrab
 except ImportError:
@@ -57,7 +60,91 @@ def grab_image_from_clipboard():
         time.sleep(0.1)
     return None
 
-def render_image_input(label="Schematic", key="img_input", current_image_path=None):
+def extract_ntop_fea_from_image(pil_img):
+    if pil_img is None or os.name != "nt":
+        return None, None
+    tmp_path = None
+    try:
+        im = pil_img.convert("L")
+        w, h = im.size
+        crop = ImageOps.invert(im.crop((int(w * 0.68), int(h * 0.22), w, h)))
+        crop = crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.BICUBIC)
+        fd, tmp_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        crop.save(tmp_path, format="PNG")
+
+        ps_cmd = (
+            "Add-Type -AssemblyName System.Runtime.WindowsRuntime; "
+            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]; "
+            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]; "
+            "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]; "
+            "$g = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]; "
+            "Function Await($t, $r) { $a = $g.MakeGenericMethod($r).Invoke($null, @($t)); $a.Wait(-1) | Out-Null; $a.Result }; "
+            "$eng = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages(); "
+            f"$f = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync('{tmp_path}')) ([Windows.Storage.StorageFile]); "
+            "$s = Await ($f.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream]); "
+            "$d = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($s)) ([Windows.Graphics.Imaging.BitmapDecoder]); "
+            "$b = Await ($d.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap]); "
+            "$res = Await ($eng.RecognizeAsync($b)) ([Windows.Media.Ocr.OcrResult]); "
+            "$s.Dispose(); "
+            "foreach ($l in $res.Lines) { Write-Output $l.Text }"
+        )
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        text = proc.stdout or ""
+        if not text.strip():
+            return None, None
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        first_lines = " ".join(lines[:4]).lower()
+        nospace = first_lines.replace(" ", "")
+
+        detected_lc = None
+        if "pure" in first_lines and "brak" in first_lines:
+            detected_lc = "LC1"
+        elif "pure" in first_lines and "acc" in first_lines:
+            detected_lc = "LC2"
+        elif "pure" in first_lines and ("corn" in first_lines or "com" in first_lines):
+            detected_lc = "LC3"
+        elif "brak" in first_lines and ("cornering2" in nospace or "comering2" in nospace):
+            detected_lc = "LC5"
+        elif "brak" in first_lines and ("corn" in first_lines or "com" in first_lines):
+            detected_lc = "LC4"
+        elif "acc" in first_lines and ("cornering2" in nospace or "comering2" in nospace):
+            detected_lc = "LC7"
+        elif "acc" in first_lines and ("corn" in first_lines or "com" in first_lines):
+            detected_lc = "LC6"
+        elif "-1kn" in nospace or "-ikn" in nospace or "result_2" in nospace or "result-2" in nospace:
+            detected_lc = "LC9"
+        elif "1kn" in nospace or "ikn" in nospace:
+            detected_lc = "LC8"
+
+        nums = []
+        for m in re.finditer(r"([1-9])[.\-]?(\d{5})\s*(?:e\s*[\-+]|[\+&])\s*0([0-4])", text, re.I):
+            mant = float(m.group(1) + "." + m.group(2))
+            exp = int(m.group(3))
+            nums.append(mant * (10 ** (-exp)))
+
+        detected_disp = None
+        if nums:
+            raw_max = nums[0]
+            detected_disp = math.floor(raw_max * 10000 + 1e-9) / 10000
+
+        return detected_lc, detected_disp
+    except Exception:
+        return None, None
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+def render_image_input(label="Schematic", key="img_input", current_image_path=None, ocr_callback=None):
     clipboard_key = f"clipboard_{key}"
     st.markdown(f"**{label}**")
 
@@ -69,7 +156,10 @@ def render_image_input(label="Schematic", key="img_input", current_image_path=No
             pasted = grab_image_from_clipboard()
             if pasted is not None:
                 st.session_state[clipboard_key] = pasted
-                st.toast("Image pasted from clipboard.")
+                if ocr_callback is not None:
+                    ocr_callback(pasted)
+                else:
+                    st.toast("Image pasted from clipboard.")
                 st.rerun()
             else:
                 st.warning("No image found on system clipboard. Capture a screenshot first (Win + Shift + S).")
@@ -1901,12 +1991,43 @@ elif st.session_state.current_page == "Part Management":
                     st.divider()
                     st.subheader("FEA Displacements")
 
+                    ocr_vals_key = f"ocr_vals_new_{selected_part}_{source_idx}"
+                    ocr_rev_key = f"ocr_rev_new_{selected_part}_{source_idx}"
+                    if ocr_vals_key not in st.session_state:
+                        st.session_state[ocr_vals_key] = {lc: None for lc in LC_KEYS}
+                    if ocr_rev_key not in st.session_state:
+                        st.session_state[ocr_rev_key] = 0
+
+                    editor_widget_key = f"stiff_editor_new_{selected_part}_{source_idx}_{st.session_state[ocr_rev_key]}"
+                    if editor_widget_key in st.session_state and isinstance(st.session_state[editor_widget_key], dict):
+                        for r_idx_str, r_changes in st.session_state[editor_widget_key].get("edited_rows", {}).items():
+                            r_idx = int(r_idx_str)
+                            if 0 <= r_idx < len(LC_KEYS) and "Displacement (mm)" in r_changes:
+                                st.session_state[ocr_vals_key][LC_KEYS[r_idx]] = r_changes["Displacement (mm)"]
+
+                    if st.button("Paste FEA Print", key=f"btn_ocr_new_{selected_part}_{source_idx}", use_container_width=True):
+                        pasted_fea = grab_image_from_clipboard()
+                        if pasted_fea is not None:
+                            det_lc, det_disp = extract_ntop_fea_from_image(pasted_fea)
+                            if det_lc and det_disp is not None:
+                                st.session_state[f"clipboard_new_up_lc_{det_lc}"] = pasted_fea
+                                st.session_state[ocr_vals_key][det_lc] = det_disp
+                                st.session_state[ocr_rev_key] += 1
+                                st.toast(f"{det_lc} ({LC_INFO[det_lc]['desc']}): {det_disp:.4f} mm")
+                                st.rerun()
+                            elif det_disp is not None:
+                                st.warning(f"Detected {det_disp:.4f} mm, but Load Case title was not visible. Paste inside the specific LC tab below.")
+                            else:
+                                st.warning("Could not read nTop displacement scale from clipboard image.")
+                        else:
+                            st.warning("No image found on system clipboard. Capture a screenshot first (Win + Shift + S).")
+
                     editor_rows = []
                     for lc in LC_KEYS:
                         lbl = f"{lc} ({LC_INFO[lc]['desc']})" if lc in ["LC8", "LC9"] else lc
                         editor_rows.append({
                             "Load Case": lbl,
-                            "Displacement (mm)": None,
+                            "Displacement (mm)": st.session_state[ocr_vals_key].get(lc, None),
                         })
                     df_stiff_input = pd.DataFrame(editor_rows)
                     df_stiff_input["Displacement (mm)"] = df_stiff_input["Displacement (mm)"].astype(float)
@@ -1924,17 +2045,33 @@ elif st.session_state.current_page == "Part Management":
                             )
                         },
                         use_container_width=True,
-                        key=f"stiff_editor_new_{selected_part}_{source_idx}"
+                        key=editor_widget_key
                     )
 
                     for r in edited_stiff_df.to_dict('records'):
                         lc_id = r["Load Case"].split(" ")[0]
-                        raw_d = r.get("Displacement (mm)", 0.0)
+                        raw_d = r.get("Displacement (mm)", None)
                         try:
-                            num_d = float(raw_d if raw_d is not None else 0.0)
-                            user_stiff_vals[lc_id] = 0.0 if math.isnan(num_d) else num_d
+                            if raw_d is None or (isinstance(raw_d, float) and math.isnan(raw_d)):
+                                st.session_state[ocr_vals_key][lc_id] = None
+                                user_stiff_vals[lc_id] = 0.0
+                            else:
+                                num_d = float(raw_d)
+                                st.session_state[ocr_vals_key][lc_id] = None if math.isnan(num_d) else num_d
+                                user_stiff_vals[lc_id] = 0.0 if math.isnan(num_d) else num_d
                         except Exception:
                             user_stiff_vals[lc_id] = 0.0
+
+                    def make_new_lc_ocr_cb(target_lc):
+                        def _cb(img):
+                            _, det_disp = extract_ntop_fea_from_image(img)
+                            if det_disp is not None:
+                                st.session_state[ocr_vals_key][target_lc] = det_disp
+                                st.session_state[ocr_rev_key] += 1
+                                st.toast(f"{target_lc}: {det_disp:.4f} mm")
+                            else:
+                                st.toast("Image pasted from clipboard.")
+                        return _cb
 
                     with st.expander("FEA Screenshots", expanded=False):
                         lc_tabs = st.tabs([f"{lc}" for lc in LC_KEYS])
@@ -1943,7 +2080,8 @@ elif st.session_state.current_page == "Part Management":
                                 st.write(f"**{lc} - {LC_INFO[lc]['desc']}**")
                                 pasted_lc_img = render_image_input(
                                     label=f"{lc} Screenshot",
-                                    key=f"new_up_lc_{lc}"
+                                    key=f"new_up_lc_{lc}",
+                                    ocr_callback=make_new_lc_ocr_cb(lc)
                                 )
                                 if pasted_lc_img is not None:
                                     user_lc_images[lc] = pasted_lc_img
@@ -2039,6 +2177,8 @@ elif st.session_state.current_page == "Part Management":
                     df_parts.loc[part_mask, "Justification"] = comp_just
                     df_parts.loc[part_mask, "Tolerancing Data"] = comp_tol
                     save_parts(df_parts)
+                    st.session_state.pop(f"ocr_vals_new_{selected_part}_{source_idx}", None)
+                    st.session_state.pop(f"ocr_rev_new_{selected_part}_{source_idx}", None)
                     new_idx = df_parts.index[-1]
                     st.session_state[f"pending_edit_{selected_part}"] = new_idx
                     st.session_state[f"pending_eval_{selected_part}"] = str(new_version)
@@ -2122,9 +2262,42 @@ elif st.session_state.current_page == "Part Management":
                         else:
                             curr_edit_stiff = DEFAULT_FST16_DISPLACEMENTS
 
+                    ocr_edit_vals_key = f"ocr_vals_edit_{selected_idx}"
+                    ocr_edit_rev_key = f"ocr_rev_edit_{selected_idx}"
+                    if ocr_edit_vals_key not in st.session_state:
+                        st.session_state[ocr_edit_vals_key] = {
+                            lc: curr_edit_stiff.get(lc, LC_INFO[lc]["default_fst16"]) for lc in LC_KEYS
+                        }
+                    if ocr_edit_rev_key not in st.session_state:
+                        st.session_state[ocr_edit_rev_key] = 0
+
+                    edit_widget_key = f"stiff_editor_edit_{selected_idx}_{st.session_state[ocr_edit_rev_key]}"
+                    if edit_widget_key in st.session_state and isinstance(st.session_state[edit_widget_key], dict):
+                        for r_idx_str, r_changes in st.session_state[edit_widget_key].get("edited_rows", {}).items():
+                            r_idx = int(r_idx_str)
+                            if 0 <= r_idx < len(LC_KEYS) and "Displacement (mm)" in r_changes:
+                                st.session_state[ocr_edit_vals_key][LC_KEYS[r_idx]] = r_changes["Displacement (mm)"]
+
+                    if st.button("Paste FEA Print", key=f"btn_ocr_edit_{selected_idx}", use_container_width=True):
+                        pasted_fea_edit = grab_image_from_clipboard()
+                        if pasted_fea_edit is not None:
+                            det_lc, det_disp = extract_ntop_fea_from_image(pasted_fea_edit)
+                            if det_lc and det_disp is not None:
+                                st.session_state[f"clipboard_edit_up_lc_{selected_idx}_{det_lc}"] = pasted_fea_edit
+                                st.session_state[ocr_edit_vals_key][det_lc] = det_disp
+                                st.session_state[ocr_edit_rev_key] += 1
+                                st.toast(f"{det_lc} ({LC_INFO[det_lc]['desc']}): {det_disp:.4f} mm")
+                                st.rerun()
+                            elif det_disp is not None:
+                                st.warning(f"Detected {det_disp:.4f} mm, but Load Case title was not visible. Paste inside the specific LC tab below.")
+                            else:
+                                st.warning("Could not read nTop displacement scale from clipboard image.")
+                        else:
+                            st.warning("No image found on system clipboard. Capture a screenshot first (Win + Shift + S).")
+
                     editor_rows_edit = []
                     for lc in LC_KEYS:
-                        val = curr_edit_stiff.get(lc, LC_INFO[lc]["default_fst16"])
+                        val = st.session_state[ocr_edit_vals_key].get(lc, curr_edit_stiff.get(lc, LC_INFO[lc]["default_fst16"]))
                         lbl = f"{lc} ({LC_INFO[lc]['desc']})" if lc in ["LC8", "LC9"] else lc
                         editor_rows_edit.append({
                             "Load Case": lbl,
@@ -2145,7 +2318,7 @@ elif st.session_state.current_page == "Part Management":
                             )
                         },
                         use_container_width=True,
-                        key=f"stiff_editor_edit_{selected_idx}"
+                        key=edit_widget_key
                     )
 
                     for r in edited_stiff_df_edit.to_dict('records'):
@@ -2153,9 +2326,22 @@ elif st.session_state.current_page == "Part Management":
                         raw_d = r.get("Displacement (mm)", 0.0)
                         try:
                             num_d = float(raw_d if raw_d is not None else 0.0)
-                            user_edit_stiff_vals[lc_id] = 0.0 if math.isnan(num_d) else num_d
+                            clean_d = 0.0 if math.isnan(num_d) else num_d
+                            st.session_state[ocr_edit_vals_key][lc_id] = clean_d
+                            user_edit_stiff_vals[lc_id] = clean_d
                         except Exception:
                             user_edit_stiff_vals[lc_id] = 0.0
+
+                    def make_edit_lc_ocr_cb(target_lc):
+                        def _cb(img):
+                            _, det_disp = extract_ntop_fea_from_image(img)
+                            if det_disp is not None:
+                                st.session_state[ocr_edit_vals_key][target_lc] = det_disp
+                                st.session_state[ocr_edit_rev_key] += 1
+                                st.toast(f"{target_lc}: {det_disp:.4f} mm")
+                            else:
+                                st.toast("Image pasted from clipboard.")
+                        return _cb
 
                     with st.expander("FEA Screenshots", expanded=False):
                         lc_tabs_edit = st.tabs([f"{lc}" for lc in LC_KEYS])
@@ -2166,7 +2352,8 @@ elif st.session_state.current_page == "Part Management":
                                 p_edit_lc = render_image_input(
                                     label=f"{lc} Screenshot",
                                     key=f"edit_up_lc_{selected_idx}_{lc}",
-                                    current_image_path=cur_lc_p
+                                    current_image_path=cur_lc_p,
+                                    ocr_callback=make_edit_lc_ocr_cb(lc)
                                 )
                                 if p_edit_lc is not None:
                                     updated_lc_images_pasted[lc] = p_edit_lc
