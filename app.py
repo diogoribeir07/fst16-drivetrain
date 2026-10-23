@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
+import io
+import math
 import json
 import time
 from datetime import datetime
@@ -13,7 +15,6 @@ except ImportError:
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from bearing_sizer import render_bearing_sizer_page
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -218,6 +219,29 @@ def format_tolerancing_data(records):
     return json.dumps(cleaned)
 
 # ==================== EXCEL TABLE FORMATTER ====================
+def read_excel_safely(filepath):
+    try:
+        with open(filepath, "rb") as f:
+            buf = io.BytesIO(f.read())
+        return pd.read_excel(buf)
+    except PermissionError:
+        if os.name == "nt":
+            import ctypes
+            import msvcrt
+            GENERIC_READ = 0x80000000
+            FILE_SHARE_ALL = 0x00000001 | 0x00000002 | 0x00000004
+            OPEN_EXISTING = 3
+            FILE_ATTRIBUTE_NORMAL = 0x80
+            handle = ctypes.windll.kernel32.CreateFileW(
+                str(filepath), GENERIC_READ, FILE_SHARE_ALL, None, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, None
+            )
+            if handle not in (-1, 0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF):
+                fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+                with os.fdopen(fd, "rb") as f:
+                    buf = io.BytesIO(f.read())
+                return pd.read_excel(buf)
+        raise
+
 def save_formatted_excel(df, filename, table_name="DataTable"):
     try:
         if "Subassembly" in df.columns and "Part Name" in df.columns:
@@ -255,10 +279,10 @@ def save_formatted_excel(df, filename, table_name="DataTable"):
                 )
                 tab.tableStyleInfo = style
                 worksheet.add_table(tab)
-                
+        return True
     except PermissionError:
-        st.error(f"PERMISSION DENIED: Please close '{filename}' in Microsoft Excel before interacting with the app.")
-        st.stop()
+        st.error(f"Close '{os.path.basename(filename)}' in Microsoft Excel before saving.")
+        return False
 
 # ==================== FEA STIFFNESS & DISPLACEMENTS ====================
 LC_KEYS = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
@@ -281,7 +305,7 @@ DEFAULT_FST16_DISPLACEMENTS = {k: LC_INFO[k]["default_fst16"] for k in LC_KEYS}
 def parse_stiffness_data(val):
     if pd.isna(val) or str(val).strip() == "" or str(val).strip() == "nan":
         return {}
-    val_str = str(val).strip()
+    val_str = str(val).strip().replace(": NaN", ": 0.0").replace(": nan", ": 0.0")
     try:
         raw = json.loads(val_str)
         res = {}
@@ -289,9 +313,10 @@ def parse_stiffness_data(val):
             if lc in raw:
                 item = raw[lc]
                 if isinstance(item, dict):
-                    res[lc] = float(item.get("disp", 0.0))
+                    num = float(item.get("disp", 0.0) or 0.0)
                 else:
-                    res[lc] = float(item)
+                    num = float(item if item is not None else 0.0)
+                res[lc] = 0.0 if math.isnan(num) else num
         return res
     except Exception:
         pass
@@ -303,11 +328,12 @@ def format_stiffness_data(disp_dict):
         if lc in disp_dict and disp_dict[lc] is not None:
             try:
                 if isinstance(disp_dict[lc], dict):
-                    cleaned[lc] = round(float(disp_dict[lc].get("disp", 0.0)), 4)
+                    num = float(disp_dict[lc].get("disp", 0.0) or 0.0)
                 else:
-                    cleaned[lc] = round(float(disp_dict[lc]), 4)
+                    num = float(disp_dict[lc])
+                cleaned[lc] = 0.0 if math.isnan(num) else round(num, 4)
             except (ValueError, TypeError):
-                pass
+                cleaned[lc] = 0.0
     return json.dumps(cleaned)
 
 def build_comparison_dataframe(curr_stiff, ref_stiff, ref_label="FST15", curr_label=None):
@@ -562,11 +588,10 @@ DEFAULT_OEM_TOLERANCES = {}
 DEFAULT_CUSTOM_TOLERANCES = {}
 
 # ==================== DATA LOAD & SAVE ====================
-# ==================== DATA LOAD & SAVE ====================
 def load_parts():
     if os.path.exists(EXCEL_PARTS):
         try:
-            df = pd.read_excel(EXCEL_PARTS)
+            df = read_excel_safely(EXCEL_PARTS)
             text_cols = [
                 "Subassembly", "Part Name", "Version", "Date", 
                 "Description", "Specifications", "Image Path", 
@@ -583,14 +608,19 @@ def load_parts():
             else:
                 needs_save = False
 
+            # Deduplicate any duplicate (Part Name, Version) rows keeping the latest entry
+            before_len = len(df)
+            df = df.drop_duplicates(subset=["Part Name", "Version"], keep="last").reset_index(drop=True)
+            if len(df) != before_len:
+                needs_save = True
 
-
-            # Auto-seed UP_01 stiffness data if empty
+            # Auto-seed and sanitize UP_01 stiffness data
             up01_mask = df["Part Name"].astype(str) == "UP_01"
             if up01_mask.any():
                 for idx in df[up01_mask].index.tolist():
                     val = df.at[idx, "Stiffness Data"]
-                    if pd.isna(val) or str(val).strip() == "" or str(val).strip() == "nan":
+                    val_str = str(val).strip()
+                    if pd.isna(val) or val_str in ["", "nan"]:
                         ver = str(df.at[idx, "Version"])
                         if "FST15" in ver.upper():
                             df.at[idx, "Stiffness Data"] = format_stiffness_data(DEFAULT_FST15_DISPLACEMENTS)
@@ -598,42 +628,9 @@ def load_parts():
                         else:
                             df.at[idx, "Stiffness Data"] = format_stiffness_data(DEFAULT_FST16_DISPLACEMENTS)
                             needs_save = True
-
-            # Auto-seed UpperSupport Version structural FEA and mass if empty/zero
-            us_mask = df["Part Name"].astype(str) == "UpperSupport Version"
-            if us_mask.any():
-                for idx in df[us_mask].index.tolist():
-                    ver = str(df.at[idx, "Version"])
-                    stiff_val = df.at[idx, "Stiffness Data"]
-                    wt_val = df.at[idx, "Weight (g)"]
-                    if "1.0" in ver or "1" == ver:
-                        if pd.isna(stiff_val) or str(stiff_val).strip() in ["", "nan", "None"]:
-                            df.at[idx, "Stiffness Data"] = json.dumps({
-                                "load_case": "Wishbone Lateral 4.4 kN",
-                                "stress": 268.0,
-                                "yield_strength": 503.0,
-                                "sf": 1.88,
-                                "disp": 0.1650,
-                                "material": "Al 7075-T6"
-                            })
-                            needs_save = True
-                        if pd.isna(wt_val) or float(wt_val or 0) == 0.0:
-                            df.at[idx, "Weight (g)"] = 112.50
-                            needs_save = True
-                    elif "2.0" in ver or "2" == ver:
-                        if pd.isna(stiff_val) or str(stiff_val).strip() in ["", "nan", "None"]:
-                            df.at[idx, "Stiffness Data"] = json.dumps({
-                                "load_case": "Wishbone Lateral 4.4 kN",
-                                "stress": 235.4,
-                                "yield_strength": 503.0,
-                                "sf": 2.14,
-                                "disp": 0.1280,
-                                "material": "Al 7075-T6"
-                            })
-                            needs_save = True
-                        if pd.isna(wt_val) or float(wt_val or 0) == 0.0:
-                            df.at[idx, "Weight (g)"] = 98.20
-                            needs_save = True
+                    elif "NaN" in val_str or "nan" in val_str:
+                        df.at[idx, "Stiffness Data"] = format_stiffness_data(parse_stiffness_data(val_str))
+                        needs_save = True
 
             if needs_save:
                 try:
@@ -643,8 +640,12 @@ def load_parts():
 
             return df
         except PermissionError:
-            st.error(f"PERMISSION DENIED: Please close '{EXCEL_PARTS}' in Microsoft Excel to continue.")
-            st.stop()
+            st.error(f"Close '{os.path.basename(EXCEL_PARTS)}' in Microsoft Excel to continue.")
+            return pd.DataFrame(columns=[
+                "Subassembly", "Part Name", "Version", "Date", 
+                "Weight (g)", "Description", "Specifications", "Image Path", 
+                "Stiffness Data", "LC Images", "Tolerancing Data", "Justification"
+            ])
     else:
         return pd.DataFrame(columns=[
             "Subassembly", "Part Name", "Version", "Date", 
@@ -655,12 +656,12 @@ def load_parts():
 def save_parts(df):
     if "Component Status" in df.columns:
         df = df.drop(columns=["Component Status"])
-    save_formatted_excel(df, EXCEL_PARTS, table_name="PartsTable")
+    return save_formatted_excel(df, EXCEL_PARTS, table_name="PartsTable")
 
 def load_assemblies():
     if os.path.exists(EXCEL_ASSEMBLIES):
         try:
-            df = pd.read_excel(EXCEL_ASSEMBLIES)
+            df = read_excel_safely(EXCEL_ASSEMBLIES)
             for c in ["Assembly Version", "Date", "Description", "Part Configuration"]:
                 if c in df.columns:
                     df[c] = df[c].fillna("").astype(object)
@@ -668,8 +669,11 @@ def load_assemblies():
                     df[c] = ""
             return df
         except PermissionError:
-            st.error(f"PERMISSION DENIED: Please close '{EXCEL_ASSEMBLIES}' in Microsoft Excel to continue.")
-            st.stop()
+            st.error(f"Close '{os.path.basename(EXCEL_ASSEMBLIES)}' in Microsoft Excel to continue.")
+            return pd.DataFrame(columns=[
+                "Assembly Version", "Date", "Total Weight (g)", 
+                "Description", "Part Configuration"
+            ])
     else:
         return pd.DataFrame(columns=[
             "Assembly Version", "Date", "Total Weight (g)", 
@@ -677,12 +681,12 @@ def load_assemblies():
         ])
 
 def save_assemblies(df):
-    save_formatted_excel(df, EXCEL_ASSEMBLIES, table_name="AssembliesTable")
+    return save_formatted_excel(df, EXCEL_ASSEMBLIES, table_name="AssembliesTable")
 
 def load_trash():
     if os.path.exists(EXCEL_TRASH):
         try:
-            df = pd.read_excel(EXCEL_TRASH)
+            df = read_excel_safely(EXCEL_TRASH)
             if "Component Status" in df.columns:
                 df = df.drop(columns=["Component Status"])
             text_cols = [
@@ -697,8 +701,12 @@ def load_trash():
                     df[c] = df[c].fillna("").astype(object)
             return df
         except PermissionError:
-            st.error(f"PERMISSION DENIED: Please close '{EXCEL_TRASH}' in Microsoft Excel to continue.")
-            st.stop()
+            st.error(f"Close '{os.path.basename(EXCEL_TRASH)}' in Microsoft Excel to continue.")
+            return pd.DataFrame(columns=[
+                "Subassembly", "Part Name", "Version", "Date", 
+                "Weight (g)", "Description", "Specifications", "Image Path", 
+                "Stiffness Data", "LC Images", "Tolerancing Data", "Justification"
+            ])
     else:
         return pd.DataFrame(columns=[
             "Subassembly", "Part Name", "Version", "Date", 
@@ -709,12 +717,12 @@ def load_trash():
 def save_trash(df):
     if "Component Status" in df.columns:
         df = df.drop(columns=["Component Status"])
-    save_formatted_excel(df, EXCEL_TRASH, table_name="TrashTable")
+    return save_formatted_excel(df, EXCEL_TRASH, table_name="TrashTable")
 
 def load_requirements():
     if os.path.exists(EXCEL_REQUIREMENTS):
         try:
-            df = pd.read_excel(EXCEL_REQUIREMENTS)
+            df = read_excel_safely(EXCEL_REQUIREMENTS)
             for c in ["ID", "Category", "Group", "Requirement", "Explanation", "Verification", "Validation", "Related Parts"]:
                 if c not in df.columns:
                     df[c] = ""
@@ -722,8 +730,10 @@ def load_requirements():
                     df[c] = df[c].fillna("").astype(object)
             return df
         except PermissionError:
-            st.error(f"PERMISSION DENIED: Please close '{EXCEL_REQUIREMENTS}' in Microsoft Excel to continue.")
-            st.stop()
+            st.error(f"Close '{os.path.basename(EXCEL_REQUIREMENTS)}' in Microsoft Excel to continue.")
+            return pd.DataFrame(columns=[
+                "ID", "Category", "Group", "Requirement", "Explanation", "Verification", "Validation", "Related Parts"
+            ])
     else:
         try:
             from init_requirements import INITIAL_REQUIREMENTS
@@ -736,14 +746,14 @@ def load_requirements():
         return df
 
 def save_requirements(df):
-    save_formatted_excel(df, EXCEL_REQUIREMENTS, table_name="RequirementsTable")
+    return save_formatted_excel(df, EXCEL_REQUIREMENTS, table_name="RequirementsTable")
 
 # ==================== STREAMLIT CONFIG & STATE ====================
 st.set_page_config(page_title="Drivetrain Hub", layout="wide")
 
 if 'current_page' not in st.session_state:
     st.session_state.current_page = "Wheel Assembly"
-elif st.session_state.current_page in ["Knowledge Hub", "Design Hub", "Assembly Tree"]:
+elif st.session_state.current_page in ["Knowledge Hub", "Design Hub", "Assembly Tree", "Bearing Sizer"]:
     st.session_state.current_page = "Wheel Assembly"
 
 if 'action' not in st.session_state:
@@ -797,15 +807,6 @@ if st.sidebar.button("Requirements", use_container_width=True, type="primary" if
     st.session_state.selected_part = None
     st.session_state.action = "view"
     st.rerun()
-
-# Bearing Sizer button
-sizer_active = (st.session_state.current_page == "Bearing Sizer")
-if st.sidebar.button("Bearing Sizer", use_container_width=True, type="primary" if sizer_active else "secondary"):
-    st.session_state.current_page = "Bearing Sizer"
-    st.session_state.selected_part = None
-    st.session_state.action = "view"
-    st.rerun()
-st.sidebar.caption("Bearing Calculator")
 
 st.sidebar.divider()
 
@@ -1189,6 +1190,44 @@ if st.session_state.current_page == "Wheel Assembly":
         
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
+        if not selected_parts_df.empty:
+            with st.expander("Component Summary", expanded=False):
+                active_part_rows = []
+                for _, s_row in selected_parts_df.iterrows():
+                    role_name = str(s_row["Part Name"])
+                    ver_str = str(s_row["Version"])
+                    real_name = ver_str if role_name in ["Inner Bearing", "Outer Bearing", "Seal"] else role_name
+                    active_part_rows.append((role_name, real_name, ver_str, s_row))
+
+                summary_items = []
+                for role_name, real_name, ver_str, s_row in active_part_rows:
+                    just_txt = str(s_row.get("Justification", "")).strip()
+                    if just_txt == "nan":
+                        just_txt = ""
+                    tols_list = parse_tolerancing_data(s_row.get("Tolerancing Data", ""))
+                    reqs_df = pd.DataFrame()
+                    if not df_requirements.empty:
+                        m_req = df_requirements["Related Parts"].astype(str).str.contains(str(real_name), na=False, regex=False)
+                        reqs_df = df_requirements[m_req]
+                    if just_txt or tols_list or not reqs_df.empty:
+                        summary_items.append((role_name, real_name, ver_str, just_txt, tols_list, reqs_df))
+
+                if summary_items:
+                    comp_names = [f"{r_name}" if r_name == real_n else f"{r_name} ({real_n})" for r_name, real_n, _, _, _, _ in summary_items]
+                    sel_comp_idx = st.selectbox("Select Component", range(len(comp_names)), format_func=lambda i: comp_names[i], key="asm_comp_summary_sel")
+                    _, real_n, _, j_txt, t_list, r_df = summary_items[sel_comp_idx]
+                    if j_txt:
+                        st.markdown("##### Justification")
+                        st.markdown(j_txt)
+                    if t_list:
+                        st.markdown("##### Tolerances")
+                        st.dataframe(pd.DataFrame(t_list), hide_index=True, use_container_width=True)
+                    if not r_df.empty:
+                        st.markdown("##### Related Requirements")
+                        st.dataframe(r_df[["ID", "Category", "Requirement", "Verification", "Validation"]], hide_index=True, use_container_width=True)
+                else:
+                    st.caption("No component notes recorded.")
+
     st.divider()
     with st.expander("Manage Assemblies"):
         mode = st.radio("Action", ["Create Version", "Edit Assembly"], horizontal=True)
@@ -1334,12 +1373,6 @@ elif st.session_state.current_page == "Requirements":
     st.title("Requirements")
     render_requirements_section(df_requirements)
 
-# =========================================================================
-# PAGE: BEARING SIZER
-# =========================================================================
-elif st.session_state.current_page == "Bearing Sizer":
-    render_bearing_sizer_page()
-
 
 # =========================================================================
 # PAGE 3: PART MANAGEMENT
@@ -1367,7 +1400,11 @@ elif st.session_state.current_page == "Part Management":
                 initial_weight = st.number_input("Weight (g)", min_value=0.0, format="%.2f")
             
             initial_desc = st.text_area("Description", height=calc_description_height(""))
-            has_just_create = st.checkbox("Include Justification", value=False, key="cb_create_has_just")
+            c_opt1, c_opt2 = st.columns(2)
+            with c_opt1:
+                has_just_create = st.checkbox("Include Justification", value=False, key="cb_create_has_just")
+            with c_opt2:
+                has_tol_create = st.checkbox("Include Tolerances", value=False, key="cb_create_has_tol")
             if has_just_create:
                 create_just = st.text_area("Justification", height=100, key="create_just_text")
             else:
@@ -1381,9 +1418,12 @@ elif st.session_state.current_page == "Part Management":
                 meas_df_init = pd.DataFrame([{"Property": "", "Value": ""}])
                 edited_meas_init = st.data_editor(meas_df_init, num_rows="dynamic", use_container_width=True, key="new_part_meas")
 
-                st.markdown("**Tolerances**")
-                tol_df_init = pd.DataFrame([{"Interface / Feature": "", "Nominal (mm)": "", "Fit / Tolerance": "", "Roughness / Notes": ""}])
-                edited_tol_init = st.data_editor(tol_df_init, num_rows="dynamic", use_container_width=True, key="new_part_tol")
+                if has_tol_create:
+                    st.markdown("**Tolerances**")
+                    tol_df_init = pd.DataFrame([{"Interface / Feature": "", "Nominal (mm)": "", "Fit / Tolerance": "", "Roughness / Notes": ""}])
+                    edited_tol_init = st.data_editor(tol_df_init, num_rows="dynamic", use_container_width=True, key="new_part_tol")
+                else:
+                    edited_tol_init = pd.DataFrame()
                 
             with col_img:
                 pasted_img = render_image_input("Schematic", key="new_part_img")
@@ -1398,7 +1438,7 @@ elif st.session_state.current_page == "Part Management":
                         st.session_state.pop("clipboard_new_part_img", None)
                         
                     final_meas = [r for r in edited_meas_init.to_dict('records') if str(r.get('Property', '')).strip() != ""]
-                    final_tol = [r for r in edited_tol_init.to_dict('records') if str(r.get('Interface / Feature', '')).strip() != ""]
+                    final_tol = [r for r in edited_tol_init.to_dict('records') if str(r.get('Interface / Feature', '')).strip() != ""] if (has_tol_create and not edited_tol_init.empty) else []
 
                     new_row = {
                         "Subassembly": subassembly,
@@ -1438,7 +1478,7 @@ elif st.session_state.current_page == "Part Management":
             latest_iter = part_data.iloc[-1]
             subassembly = latest_iter['Subassembly']
             is_oem = (subassembly == "Other") or (str(selected_part) in ["61815", "61816", "71815-TN", "71816-TN", "85X100X9 HMSA10 V", "95X110X9 HMSA10 V"])
-            is_structural = (str(selected_part) in ["UP_01", "UpperSupport Version", "HB_01"])
+            is_structural = (str(selected_part) in ["UP_01", "UP_02", "UpperSupport Version", "HB_01"])
 
             if f"pending_eval_{selected_part}" in st.session_state:
                 st.session_state[f"comp_eval_{selected_part}"] = st.session_state.pop(f"pending_eval_{selected_part}")
@@ -1568,18 +1608,28 @@ elif st.session_state.current_page == "Part Management":
                         df_view = build_comparison_dataframe(eval_stiff, ref_stiff, ref_label=ref_label, curr_label=eval_label)
                         st.dataframe(style_comparison_dataframe(df_view), use_container_width=True, hide_index=True)
 
+                        ref_lc_dict = parse_lc_images(ref_row.get("LC Images", ""))
                         eval_lc_dict = parse_lc_images(eval_row.get("LC Images", ""))
-                        if eval_lc_dict:
+                        if eval_lc_dict or ref_lc_dict:
                             with st.expander("FEA Screenshots", expanded=False):
-                                avail_lcs = [lc for lc in LC_KEYS if lc in eval_lc_dict]
+                                avail_lcs = [lc for lc in LC_KEYS if lc in eval_lc_dict or lc in ref_lc_dict]
                                 if avail_lcs:
                                     view_tabs = st.tabs([f"{lc}" for lc in avail_lcs])
                                     for idx_lc, lc in enumerate(avail_lcs):
                                         with view_tabs[idx_lc]:
                                             st.write(f"**{lc} - {LC_INFO[lc]['desc']}**")
-                                            img_f = resolve_image_path(eval_lc_dict[lc])
-                                            if img_f:
-                                                st.image(img_f, caption=f"{eval_label} - {lc}", use_container_width=True)
+                                            img_ref_f = resolve_image_path(ref_lc_dict.get(lc))
+                                            img_eval_f = resolve_image_path(eval_lc_dict.get(lc))
+                                            if str(ref_v) != str(eval_v) and img_ref_f and img_eval_f:
+                                                c_lc1, c_lc2 = st.columns(2)
+                                                with c_lc1:
+                                                    st.image(img_ref_f, caption=f"{ref_label} - {lc}", use_container_width=True)
+                                                with c_lc2:
+                                                    st.image(img_eval_f, caption=f"{eval_label} - {lc}", use_container_width=True)
+                                            elif img_eval_f:
+                                                st.image(img_eval_f, caption=f"{eval_label} - {lc}", use_container_width=True)
+                                            elif img_ref_f:
+                                                st.image(img_ref_f, caption=f"{ref_label} - {lc}", use_container_width=True)
                     else:
                         eval_struct = parse_structural_data(eval_row.get("Stiffness Data", ""))
                         ref_struct = parse_structural_data(ref_row.get("Stiffness Data", ""))
@@ -1614,32 +1664,49 @@ elif st.session_state.current_page == "Part Management":
 
                     st.divider()
 
-                # Current Version: Tolerances & Specifications on Left, Schematic on Right
-                col_left, col_right = st.columns([1.5, 1.2])
-                with col_left:
-                    st.markdown("#### Specifications")
-                    if latest_iter.get("Description"):
-                        st.markdown(latest_iter["Description"])
-                    raw_specs = parse_measurements(latest_iter.get("Specifications", latest_iter.get("Constraints", "")))
-                    if raw_specs:
-                        st.dataframe(pd.DataFrame(raw_specs), hide_index=True, use_container_width=True)
-                    else:
-                        st.caption("No specifications recorded.")
+                # Synced Side-by-Side Comparison when comparing two distinct iterations
+                if not is_oem and len(part_data) > 1 and str(ref_v) != str(eval_v):
+                    col_base, col_eval = st.columns(2)
+                    for col_side, side_title, side_label, side_row in [
+                        (col_base, f"Baseline: {ref_label}", ref_label, ref_row),
+                        (col_eval, f"Evaluated: {eval_label}", eval_label, eval_row),
+                    ]:
+                        with col_side:
+                            st.markdown(f"#### {side_title}")
+                            st.caption(f"Weight: {float(side_row['Weight (g)']):.2f} g | Date: {side_row['Date']}")
+                            side_desc = str(side_row.get("Description", "")).strip()
+                            if side_desc and side_desc != "nan":
+                                st.markdown(side_desc)
+                            side_specs = parse_measurements(side_row.get("Specifications", side_row.get("Constraints", "")))
+                            if side_specs:
+                                st.markdown("**Specifications**")
+                                st.dataframe(pd.DataFrame(side_specs), hide_index=True, use_container_width=True)
+                            side_img = resolve_image_path(side_row.get("Image Path"))
+                            if side_img:
+                                st.image(side_img, caption=f"{selected_part} {side_label}", use_container_width=True)
+                            else:
+                                st.caption("No schematic image.")
+                else:
+                    single_row = eval_row if (not is_oem and len(part_data) > 1) else latest_iter
+                    col_left, col_right = st.columns([1.5, 1.2])
+                    with col_left:
+                        st.markdown("#### Specifications")
+                        single_desc = str(single_row.get("Description", "")).strip()
+                        if single_desc and single_desc != "nan":
+                            st.markdown(single_desc)
+                        raw_specs = parse_measurements(single_row.get("Specifications", single_row.get("Constraints", "")))
+                        if raw_specs:
+                            st.dataframe(pd.DataFrame(raw_specs), hide_index=True, use_container_width=True)
+                        else:
+                            st.caption("No specifications recorded.")
 
-                    st.markdown("#### Tolerances")
-                    tol_data = parse_tolerancing_data(latest_iter.get("Tolerancing Data", ""))
-                    if tol_data:
-                        st.dataframe(pd.DataFrame(tol_data), hide_index=True, use_container_width=True)
-                    else:
-                        st.caption("No tolerances recorded.")
-
-                with col_right:
-                    st.markdown("#### Schematic")
-                    img_f = resolve_image_path(latest_iter.get("Image Path"))
-                    if img_f:
-                        st.image(img_f, caption=f"{selected_part} Schematic", use_container_width=True)
-                    else:
-                        st.info("No schematic image.")
+                    with col_right:
+                        st.markdown("#### Schematic")
+                        img_f = resolve_image_path(single_row.get("Image Path"))
+                        if img_f:
+                            st.image(img_f, caption=f"{selected_part} Schematic", use_container_width=True)
+                        else:
+                            st.info("No schematic image.")
 
                 if not df_requirements.empty and selected_part:
                     match_mask = df_requirements["Related Parts"].astype(str).str.contains(str(selected_part), na=False)
@@ -1651,55 +1718,6 @@ elif st.session_state.current_page == "Part Management":
                                 hide_index=True,
                                 use_container_width=True
                             )
-
-                # If Custom: Iteration History
-                if not is_oem and len(part_data) > 0:
-                    st.divider()
-                    st.subheader("Iteration History")
-                    for _, row in part_data.sort_values("Date", ascending=False).iterrows():
-                        with st.container():
-                            st.markdown(f"### {format_v_label(row['Version'])} <span style='font-size:16px; color:gray;'>({row['Date']})</span>", unsafe_allow_html=True)
-                            img_file = resolve_image_path(row.get('Image Path'))
-                            hist_meas = parse_measurements(row.get('Specifications', row.get('Constraints', '')))
-                            hist_tol = parse_tolerancing_data(row.get('Tolerancing Data', ''))
-
-                            st.write(f"**Weight:** {row['Weight (g)']} g")
-                            if row.get('Description'):
-                                st.markdown(f"**Description / Notes:**\n\n{row['Description']}")
-
-                            col_t, col_i = st.columns([1.5, 1.2])
-                            with col_t:
-                                if hist_meas:
-                                    st.markdown("**Specifications**")
-                                    st.dataframe(pd.DataFrame(hist_meas), hide_index=True, use_container_width=True)
-                                if hist_tol:
-                                    st.markdown("**Tolerances**")
-                                    st.dataframe(pd.DataFrame(hist_tol), hide_index=True, use_container_width=True)
-                            with col_i:
-                                if img_file:
-                                    st.image(img_file, caption=f"{selected_part} {format_v_label(row['Version'])}", use_container_width=True)
-                                else:
-                                    st.caption("No schematic image.")
-
-                            hist_lc_dict = parse_lc_images(row.get("LC Images", ""))
-                            if selected_part == "UP_01" and hist_lc_dict:
-                                avail_h_lcs = [lc for lc in LC_KEYS if lc in hist_lc_dict]
-                                if avail_h_lcs:
-                                    with st.expander("FEA Screenshots", expanded=False):
-                                        h_tabs = st.tabs([f"{lc}" for lc in avail_h_lcs])
-                                        for idx_lc, lc in enumerate(avail_h_lcs):
-                                            with h_tabs[idx_lc]:
-                                                st.write(f"**{lc} - {LC_INFO[lc]['desc']}**")
-                                                img_h = resolve_image_path(hist_lc_dict[lc])
-                                                if img_h:
-                                                    st.image(img_h, caption=f"{format_v_label(row['Version'])} - {lc}", use_container_width=True)
-                            elif selected_part != "UP_01" and hist_lc_dict:
-                                h_fea_key = next((k for k in ["FEA", "Structural", "LC1"] if k in hist_lc_dict), None)
-                                if h_fea_key and hist_lc_dict.get(h_fea_key):
-                                    img_h_b = resolve_image_path(hist_lc_dict[h_fea_key])
-                                    if img_h_b:
-                                        with st.expander("FEA Screenshot", expanded=False):
-                                            st.image(img_h_b, caption=f"{selected_part} ({format_v_label(row['Version'])})", use_container_width=True)
 
             # ---------- TAB: JUSTIFICATION ----------
             with tab_just:
@@ -1809,11 +1827,34 @@ elif st.session_state.current_page == "Part Management":
             # ---------- TAB: NEW ITERATION ----------
             with tab_nova:
                 st.subheader("New Iteration")
+                source_indices = part_data.sort_values("Date", ascending=False).index.tolist()
+                if len(source_indices) > 1:
+                    def format_source_version(idx):
+                        r = part_data.loc[idx]
+                        return f"{format_v_label(r['Version'])} ({r['Date']})"
+                    copy_key = f"copy_from_{selected_part}"
+                    if copy_key in st.session_state and st.session_state[copy_key] not in source_indices:
+                        st.session_state.pop(copy_key, None)
+                    source_idx = st.selectbox(
+                        "Copy From",
+                        source_indices,
+                        format_func=format_source_version,
+                        index=0,
+                        key=copy_key
+                    )
+                    source_iter = part_data.loc[source_idx]
+                else:
+                    source_idx = source_indices[0]
+                    source_iter = latest_iter
+
                 current_v = str(latest_iter['Version'])
                 try:
                     if '.' in current_v:
-                        major, minor = map(int, current_v.split('.'))
-                        next_minor = f"{major}.{minor + 1}"
+                        parts_v = current_v.split('.')
+                        major = int(parts_v[0])
+                        minor = int(parts_v[-1])
+                        prefix = ".".join(parts_v[:-1])
+                        next_minor = f"{prefix}.{minor + 1}"
                     else:
                         major = int(current_v)
                         next_minor = f"{major}.1"
@@ -1823,12 +1864,16 @@ elif st.session_state.current_page == "Part Management":
                 col1, col2 = st.columns(2)
                 with col1:
                     new_version = st.text_input("Version ID", value=next_minor, key=f"new_ver_{selected_part}")
-                    weight = st.number_input("Weight (g)", value=float(latest_iter['Weight (g)']), format="%.2f", key=f"new_wt_{selected_part}")
+                    weight = st.number_input("Weight (g)", value=float(source_iter['Weight (g)']), format="%.2f", key=f"new_wt_{selected_part}_{source_idx}")
                 with col2:
+                    src_desc = str(source_iter.get('Description', ''))
+                    if src_desc == "nan":
+                        src_desc = ""
                     desc = st.text_area(
                         "Description",
-                        height=calc_description_height(st.session_state.get(f"new_desc_{selected_part}", "")),
-                        key=f"new_desc_{selected_part}"
+                        value=src_desc,
+                        height=calc_description_height(st.session_state.get(f"new_desc_{selected_part}_{source_idx}", src_desc)),
+                        key=f"new_desc_{selected_part}_{source_idx}"
                     )
 
                 st.divider()
@@ -1836,16 +1881,16 @@ elif st.session_state.current_page == "Part Management":
                 col_tables, col_img = st.columns([1.5, 1.2])
                 with col_tables:
                     st.markdown("**Specifications**")
-                    meas_df_nova = pd.DataFrame(parse_measurements(latest_iter.get('Specifications', latest_iter.get('Constraints', ''))))
+                    meas_df_nova = pd.DataFrame(parse_measurements(source_iter.get('Specifications', source_iter.get('Constraints', ''))))
                     if meas_df_nova.empty or "Property" not in meas_df_nova.columns:
                         meas_df_nova = pd.DataFrame([{"Property": "", "Value": ""}])
-                    edited_meas_nova = st.data_editor(meas_df_nova, num_rows="dynamic", use_container_width=True, key=f"new_meas_{selected_part}")
+                    edited_meas_nova = st.data_editor(meas_df_nova, num_rows="dynamic", use_container_width=True, key=f"new_meas_{selected_part}_{source_idx}")
                     
                 with col_img:
                     pasted_img = render_image_input(
                         "Schematic",
                         key=f"new_img_{selected_part}",
-                        current_image_path=latest_iter.get('Image Path')
+                        current_image_path=source_iter.get('Image Path')
                     )
 
                 # FEA Displacements and Screenshots for UP_01 and brackets
@@ -1856,7 +1901,7 @@ elif st.session_state.current_page == "Part Management":
                     st.divider()
                     st.subheader("FEA Displacements")
 
-                    latest_stiff = parse_stiffness_data(latest_iter.get("Stiffness Data", ""))
+                    latest_stiff = parse_stiffness_data(source_iter.get("Stiffness Data", ""))
                     if not latest_stiff:
                         latest_stiff = DEFAULT_FST16_DISPLACEMENTS
 
@@ -1883,12 +1928,17 @@ elif st.session_state.current_page == "Part Management":
                             )
                         },
                         use_container_width=True,
-                        key=f"stiff_editor_new_{selected_part}"
+                        key=f"stiff_editor_new_{selected_part}_{source_idx}"
                     )
 
                     for r in edited_stiff_df.to_dict('records'):
                         lc_id = r["Load Case"].split(" ")[0]
-                        user_stiff_vals[lc_id] = float(r["Displacement (mm)"])
+                        raw_d = r.get("Displacement (mm)", 0.0)
+                        try:
+                            num_d = float(raw_d if raw_d is not None else 0.0)
+                            user_stiff_vals[lc_id] = 0.0 if math.isnan(num_d) else num_d
+                        except Exception:
+                            user_stiff_vals[lc_id] = 0.0
 
                     with st.expander("FEA Screenshots", expanded=False):
                         lc_tabs = st.tabs([f"{lc}" for lc in LC_KEYS])
@@ -1905,21 +1955,22 @@ elif st.session_state.current_page == "Part Management":
                 elif is_structural and selected_part != "UP_01":
                     st.divider()
                     st.subheader("Structural FEA")
+                    src_struct = parse_structural_data(source_iter.get("Stiffness Data", ""))
                     with st.expander("Structural FEA", expanded=True):
                         c_f1, c_f2 = st.columns(2)
                         with c_f1:
-                            def_lc = "Wishbone Lateral 4.4 kN" if selected_part == "UpperSupport Version" else "Bump / Cornering"
-                            lc_input = st.text_input("Critical Load Case", value=def_lc, key=f"new_struct_lc_{selected_part}")
+                            def_lc = src_struct.get("load_case", "Wishbone Lateral 4.4 kN" if selected_part in ["UP_02", "UpperSupport Version"] else "Bump / Cornering")
+                            lc_input = st.text_input("Critical Load Case", value=def_lc, key=f"new_struct_lc_{selected_part}_{source_idx}")
                             mat_options = ["Al 7075-T6 (Sy = 503 MPa)", "Al 6082-T6 (Sy = 260 MPa)", "Ti-6Al-4V (Sy = 880 MPa)", "Custom"]
-                            mat_choice = st.selectbox("Material", mat_options, index=0, key=f"new_struct_mat_{selected_part}")
+                            mat_choice = st.selectbox("Material", mat_options, index=0, key=f"new_struct_mat_{selected_part}_{source_idx}")
                             yield_val = 503.0 if "7075" in mat_choice else (260.0 if "6082" in mat_choice else (880.0 if "Ti" in mat_choice else 500.0))
                         with c_f2:
-                            def_stress = 235.4 if selected_part == "UpperSupport Version" else 0.0
-                            stress_input = st.number_input("Peak Stress (MPa)", min_value=0.0, value=def_stress, format="%.1f", key=f"new_stress_{selected_part}")
-                            auto_sf = round(yield_val / stress_input, 2) if stress_input > 0 else 0.0
-                            sf_input = st.number_input("Safety Factor", min_value=0.0, value=auto_sf, format="%.2f", key=f"new_sf_{selected_part}")
-                            def_disp = 0.1280 if selected_part == "UpperSupport Version" else 0.0
-                            disp_input = st.number_input("Max Deflection (mm)", min_value=0.0, value=def_disp, format="%.4f", key=f"new_disp_{selected_part}")
+                            def_stress = float(src_struct.get("stress", 0.0))
+                            stress_input = st.number_input("Peak Stress (MPa)", min_value=0.0, value=def_stress, format="%.1f", key=f"new_stress_{selected_part}_{source_idx}")
+                            auto_sf = round(yield_val / stress_input, 2) if stress_input > 0 else float(src_struct.get("sf", 0.0))
+                            sf_input = st.number_input("Safety Factor", min_value=0.0, value=auto_sf, format="%.2f", key=f"new_sf_{selected_part}_{source_idx}")
+                            def_disp = float(src_struct.get("disp", 0.0))
+                            disp_input = st.number_input("Max Deflection (mm)", min_value=0.0, value=def_disp, format="%.4f", key=f"new_disp_{selected_part}_{source_idx}")
 
                         pasted_fea_img = render_image_input(
                             label="FEA Screenshot",
@@ -1939,10 +1990,13 @@ elif st.session_state.current_page == "Part Management":
 
                 st.divider()
                 if st.button("Save Iteration", type="primary", use_container_width=True, key=f"btn_save_new_{selected_part}"):
-                    new_version = str(new_version).lstrip('vV')
+                    new_version = str(new_version).lstrip('vV').strip()
                     img_path = save_pasted_image(pasted_img, selected_part, new_version)
                     if img_path:
                         st.session_state.pop(f"clipboard_new_img_{selected_part}", None)
+                    else:
+                        src_img = str(source_iter.get("Image Path", "")).strip()
+                        img_path = "" if src_img == "nan" else src_img
 
                     saved_lc_paths = {}
                     for lc, img in user_lc_images.items():
@@ -1980,6 +2034,10 @@ elif st.session_state.current_page == "Part Management":
                         "LC Images": format_lc_images(saved_lc_paths),
                         "Justification": comp_just
                     }
+                    # Prevent duplicate (Part Name, Version) rows
+                    dup_mask = (df_parts["Part Name"].astype(str) == str(selected_part)) & (df_parts["Version"].astype(str) == str(new_version))
+                    if dup_mask.any():
+                        df_parts = df_parts[~dup_mask].reset_index(drop=True)
                     df_parts = pd.concat([df_parts, pd.DataFrame([new_row])], ignore_index=True)
                     part_mask = df_parts["Part Name"] == selected_part
                     df_parts.loc[part_mask, "Justification"] = comp_just
@@ -2096,7 +2154,12 @@ elif st.session_state.current_page == "Part Management":
 
                     for r in edited_stiff_df_edit.to_dict('records'):
                         lc_id = r["Load Case"].split(" ")[0]
-                        user_edit_stiff_vals[lc_id] = float(r["Displacement (mm)"])
+                        raw_d = r.get("Displacement (mm)", 0.0)
+                        try:
+                            num_d = float(raw_d if raw_d is not None else 0.0)
+                            user_edit_stiff_vals[lc_id] = 0.0 if math.isnan(num_d) else num_d
+                        except Exception:
+                            user_edit_stiff_vals[lc_id] = 0.0
 
                     with st.expander("FEA Screenshots", expanded=False):
                         lc_tabs_edit = st.tabs([f"{lc}" for lc in LC_KEYS])
