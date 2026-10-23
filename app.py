@@ -1901,19 +1901,15 @@ elif st.session_state.current_page == "Part Management":
                     st.divider()
                     st.subheader("FEA Displacements")
 
-                    latest_stiff = parse_stiffness_data(source_iter.get("Stiffness Data", ""))
-                    if not latest_stiff:
-                        latest_stiff = DEFAULT_FST16_DISPLACEMENTS
-
                     editor_rows = []
                     for lc in LC_KEYS:
-                        val = latest_stiff.get(lc, LC_INFO[lc]["default_fst16"])
                         lbl = f"{lc} ({LC_INFO[lc]['desc']})" if lc in ["LC8", "LC9"] else lc
                         editor_rows.append({
                             "Load Case": lbl,
-                            "Displacement (mm)": val,
+                            "Displacement (mm)": None,
                         })
                     df_stiff_input = pd.DataFrame(editor_rows)
+                    df_stiff_input["Displacement (mm)"] = df_stiff_input["Displacement (mm)"].astype(float)
 
                     edited_stiff_df = st.data_editor(
                         df_stiff_input,
