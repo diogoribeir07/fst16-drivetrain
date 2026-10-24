@@ -1130,3 +1130,71 @@ body {
   color: var(--text-main);
   font-size: 1.05em;
 }
+
+
+/* Assembly Builder Modal Styles */
+.assembly-builder-container {
+  display: flex;
+  gap: 1.25rem;
+  height: 68vh;
+  min-height: 480px;
+}
+
+.assembly-nav-pane {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color);
+  padding-right: 0.75rem;
+  overflow-y: auto;
+}
+
+.assembly-nav-card {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assembly-nav-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
+}
+
+.assembly-nav-card.active {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: var(--accent-red);
+}
+
+.assembly-editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.assembly-section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.assembly-part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.assembly-part-row:last-child {
+  border-bottom: none;
+}

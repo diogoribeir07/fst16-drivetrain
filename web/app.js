@@ -2964,126 +2964,359 @@
     };
   };
 
-  // Modal: Manage Assemblies
+  // -------------------------------------------------------------
+  // Visual Master-Detail Assembly Builder Modal
+  // -------------------------------------------------------------
+  let activeAssemblyIdx = 0;
+
+  function parseAssemblyConfig(configStr) {
+    const config = {};
+    if (!configStr) return config;
+    const lines = String(configStr).split("\n");
+    for (const line of lines) {
+      const idx = line.indexOf(":");
+      if (idx !== -1) {
+        const k = line.substring(0, idx).trim();
+        let v = line.substring(idx + 1).trim();
+        if (v.startsWith("v") || v.startsWith("V")) {
+          v = v.substring(1).trim();
+        }
+        config[k] = v;
+      }
+    }
+    return config;
+  }
+
+  function normVer(v) {
+    let s = String(v || "").trim();
+    if (s.startsWith("v") || s.startsWith("V")) s = s.substring(1).trim();
+    return s;
+  }
+
   window.openManageAssembliesModal = function () {
     if (!isEditor()) return;
-    renderAssembliesModalContent(assembliesData);
+    activeAssemblyIdx = 0;
+    renderManageAssembliesModal();
   };
 
-  function renderAssembliesModalContent(assembliesList) {
+  window.selectAssemblyIndex = function (idx) {
+    activeAssemblyIdx = idx;
+    renderManageAssembliesModal();
+  };
+
+  window.createNewAssembly = function () {
+    const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
+    assembliesData.push({
+      "Assembly Version": `New Assembly ${assembliesData.length + 1}`,
+      "Date": nowStr,
+      "Total Weight (g)": 0,
+      "Description": "New wheel assembly configuration",
+      "Part Configuration": ""
+    });
+    activeAssemblyIdx = assembliesData.length - 1;
+    renderManageAssembliesModal();
+  };
+
+  window.duplicateAssembly = function () {
+    const curr = assembliesData[activeAssemblyIdx];
+    if (!curr) return;
+    const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
+    assembliesData.push({
+      "Assembly Version": `${curr["Assembly Version"]} (Copy)`,
+      "Date": nowStr,
+      "Total Weight (g)": parseFloat(curr["Total Weight (g)"] || 0),
+      "Description": curr.Description || "",
+      "Part Configuration": curr["Part Configuration"] || ""
+    });
+    activeAssemblyIdx = assembliesData.length - 1;
+    renderManageAssembliesModal();
+  };
+
+  window.deleteActiveAssembly = async function () {
+    const curr = assembliesData[activeAssemblyIdx];
+    if (!curr) return;
+    if (!confirm(`Delete assembly "${curr["Assembly Version"]}"?`)) return;
+    assembliesData.splice(activeAssemblyIdx, 1);
+    activeAssemblyIdx = Math.max(0, activeAssemblyIdx - 1);
+    try {
+      await window.DTCloud.commitFile("data/assemblies.json", assembliesData, `Delete assembly ${curr["Assembly Version"]}`);
+      showToast("Assembly deleted!");
+      if (assembliesData.length === 0) {
+        window.closeModal();
+      } else {
+        renderManageAssembliesModal();
+      }
+      renderAssemblyView();
+    } catch (e) {
+      alert("Error deleting assembly: " + e.message);
+    }
+  };
+
+  window.updateLiveAssemblyMass = function () {
+    const liveWeightEl = document.getElementById("liveAssWeight");
+    const liveDeltaEl = document.getElementById("liveAssDelta");
+    if (!liveWeightEl) return;
+
+    let sum = 0;
+    document.querySelectorAll(".ass-part-select").forEach((sel) => {
+      const selectedOpt = sel.options[sel.selectedIndex];
+      if (selectedOpt && selectedOpt.dataset.weight) {
+        sum += parseFloat(selectedOpt.dataset.weight) || 0;
+      }
+    });
+
+    liveWeightEl.textContent = `${sum.toFixed(1)} g (${(sum / 1000).toFixed(3)} kg)`;
+    if (liveDeltaEl) {
+      const fst15Base = 2220.2;
+      const diff = sum - fst15Base;
+      const pct = (diff / fst15Base) * 100;
+      const isGood = diff <= 0;
+      liveDeltaEl.className = isGood ? "delta-good" : "delta-bad";
+      liveDeltaEl.textContent = `${isGood ? "" : "+"}${diff.toFixed(1)} g (${pct.toFixed(1)}% vs FST15)`;
+    }
+  };
+
+  window.syncLiveMassToInput = function () {
+    let sum = 0;
+    document.querySelectorAll(".ass-part-select").forEach((sel) => {
+      const selectedOpt = sel.options[sel.selectedIndex];
+      if (selectedOpt && selectedOpt.dataset.weight) {
+        sum += parseFloat(selectedOpt.dataset.weight) || 0;
+      }
+    });
+    const inp = document.getElementById("inpAssTotalWeight");
+    if (inp) {
+      inp.value = sum.toFixed(1);
+    }
+  };
+
+  window.saveActiveAssembly = async function () {
+    const curr = assembliesData[activeAssemblyIdx];
+    if (!curr) return;
+
+    const verInp = document.getElementById("inpAssVersion");
+    const descInp = document.getElementById("inpAssDescription");
+    const weightInp = document.getElementById("inpAssTotalWeight");
+
+    const newVer = verInp ? verInp.value.trim() : curr["Assembly Version"];
+    const newDesc = descInp ? descInp.value.trim() : (curr.Description || "");
+    const newWeight = weightInp ? (parseFloat(weightInp.value) || 0) : (parseFloat(curr["Total Weight (g)"]) || 0);
+
+    const configLines = [];
+    document.querySelectorAll(".ass-part-select").forEach((sel) => {
+      const partKey = sel.dataset.partKey;
+      const val = sel.value;
+      if (val && val !== "-- Not Included --") {
+        configLines.push(`${partKey}: v${val}`);
+      }
+    });
+
+    curr["Assembly Version"] = newVer;
+    curr["Description"] = newDesc;
+    curr["Total Weight (g)"] = newWeight;
+    curr["Part Configuration"] = configLines.join("\n");
+    if (!curr.Date) {
+      curr.Date = new Date().toISOString().replace("T", " ").substring(0, 19);
+    }
+
+    try {
+      await window.DTCloud.commitFile("data/assemblies.json", assembliesData, `Update assembly ${newVer}`);
+      showToast("Assembly saved!");
+      renderManageAssembliesModal();
+      renderAssemblyView();
+    } catch (e) {
+      alert("Error saving assembly: " + e.message);
+    }
+  };
+
+  function renderManageAssembliesModal() {
+    if (!assembliesData || !assembliesData.length) {
+      window.createNewAssembly();
+      return;
+    }
+
+    if (activeAssemblyIdx >= assembliesData.length) {
+      activeAssemblyIdx = 0;
+    }
+
+    const curr = assembliesData[activeAssemblyIdx];
+    const currConfig = parseAssemblyConfig(curr["Part Configuration"]);
+
+    const renderCustomPartPicker = (partKey, label) => {
+      const partIters = partsData.filter((p) => p["Part Name"] === partKey);
+      const chosenVer = currConfig[partKey];
+      return `
+        <div class="assembly-part-row">
+          <div>
+            <strong style="font-size: 0.88rem; color: var(--text-main);">${partKey}</strong>
+            <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 0.4rem;">${label}</span>
+          </div>
+          <select class="form-input ass-part-select" data-part-key="${partKey}" style="width: 250px; font-size: 0.82rem;" onchange="window.updateLiveAssemblyMass()">
+            <option value="" data-weight="0">-- Not Included --</option>
+            ${partIters.map((it) => {
+              const itNorm = normVer(it.Version);
+              const isSel = chosenVer && normVer(chosenVer) === itNorm;
+              const w = parseFloat(it["Weight (g)"] || 0);
+              return `<option value="${it.Version}" data-weight="${w}" ${isSel ? "selected" : ""}>v${it.Version} (${w.toFixed(1)} g)</option>`;
+            }).join("")}
+          </select>
+        </div>
+      `;
+    };
+
+    const renderOemPicker = (partKey, label, filterFn) => {
+      const oemParts = partsData.filter((p) => (p.Subassembly || "") === "Other" && filterFn(p["Part Name"]));
+      const chosenVer = currConfig[partKey];
+      return `
+        <div class="assembly-part-row">
+          <div>
+            <strong style="font-size: 0.88rem; color: var(--text-main);">${partKey}</strong>
+            <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 0.4rem;">${label}</span>
+          </div>
+          <select class="form-input ass-part-select" data-part-key="${partKey}" style="width: 250px; font-size: 0.82rem;" onchange="window.updateLiveAssemblyMass()">
+            <option value="" data-weight="0">-- Not Included --</option>
+            ${oemParts.map((p) => {
+              const isSel = chosenVer && normVer(chosenVer) === normVer(p["Part Name"]);
+              const w = parseFloat(p["Weight (g)"] || 0);
+              return `<option value="${p["Part Name"]}" data-weight="${w}" ${isSel ? "selected" : ""}>${p["Part Name"]} (${w.toFixed(1)} g)</option>`;
+            }).join("")}
+          </select>
+        </div>
+      `;
+    };
+
     elModalContainer.innerHTML = `
       <div class="modal-overlay open">
-        <div class="modal-box modal-xl">
-          <div class="modal-header">
-            <h2 class="modal-title">Manage Assemblies</h2>
+        <div class="modal-box modal-xl" style="max-width: 1040px; height: 86vh; display: flex; flex-direction: column;">
+          
+          <!-- Modal Header -->
+          <div class="modal-header" style="flex-shrink: 0; margin-bottom: 0.75rem;">
+            <div>
+              <h2 class="modal-title">Manage Assemblies</h2>
+              <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 2px;">
+                Select component versions for each wheel assembly.
+              </p>
+            </div>
             <button class="modal-close-btn" onclick="window.closeModal()">x</button>
           </div>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-            Full wheel assembly configurations, total mass, and component breakdowns.
-          </p>
-          <div class="card-table-wrapper" style="margin-bottom: 1.5rem; max-height: 480px; overflow-y: auto;">
-            <table class="styled-table">
-              <thead>
-                <tr>
-                  <th style="width: 22%;">Assembly Version</th>
-                  <th style="width: 14%;">Weight (g)</th>
-                  <th style="width: 28%;">Description</th>
-                  <th style="width: 26%;">Part Configuration</th>
-                  <th style="width: 10%; text-align: center;">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="assTableBody">
-                ${assembliesList.map((a, i) => `
-                  <tr>
-                    <td>
-                      <input type="text" class="form-input" style="font-weight: 600;" value="${a["Assembly Version"] || a["Assembly Name"] || ""}" id="assVer_${i}">
-                      <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 3px;">${a.Date || ""}</div>
-                    </td>
-                    <td>
-                      <input type="number" step="0.1" class="form-input" value="${parseFloat(a["Total Weight (g)"] || a["FST15 Baseline (g)"] || 0).toFixed(1)}" id="assWeight_${i}">
-                    </td>
-                    <td>
-                      <input type="text" class="form-input" value="${a.Description || ""}" id="assDesc_${i}" placeholder="Summary of assembly">
-                    </td>
-                    <td>
-                      <textarea class="form-textarea" style="min-height: 58px; font-size: 0.75rem; font-family: monospace; line-height: 1.3;" id="assConfig_${i}" placeholder="UP_01: v6.0&#10;HB_01: v1.0">${a["Part Configuration"] || a["Included Parts"] || ""}</textarea>
-                    </td>
-                    <td style="text-align: center;">
-                      <button class="btn-action danger" onclick="window.removeAssemblyRow(${i})">Remove</button>
-                    </td>
-                  </tr>
+
+          <!-- Two-Pane Layout -->
+          <div class="assembly-builder-container" style="flex: 1; min-height: 0; overflow: hidden;">
+            
+            <!-- Left Pane: Assemblies List -->
+            <div class="assembly-nav-pane">
+              <button class="btn-action primary" style="width: 100%; margin-bottom: 0.75rem;" onclick="window.createNewAssembly()">+ New Assembly</button>
+              <div style="flex: 1; overflow-y: auto;">
+                ${assembliesData.map((a, i) => `
+                  <div class="assembly-nav-card ${i === activeAssemblyIdx ? "active" : ""}" onclick="window.selectAssemblyIndex(${i})">
+                    <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main); margin-bottom: 3px;">
+                      ${a["Assembly Version"] || "Untitled"}
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+                      <span style="font-weight: 600; color: var(--text-main);">${parseFloat(a["Total Weight (g)"] || 0).toFixed(1)} g</span>
+                      <span style="color: var(--text-dim);">${(a.Date || "").substring(0, 10)}</span>
+                    </div>
+                  </div>
                 `).join("")}
-              </tbody>
-            </table>
-          </div>
-          <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center;">
-            <button class="btn-action" onclick="window.addAssemblyRow()">Add Assembly</button>
-            <div style="display: flex; gap: 0.5rem;">
-              <button class="btn-secondary" onclick="window.closeModal()">Cancel</button>
-              <button class="btn-primary" id="btnSaveAss">Save Assemblies</button>
+              </div>
+            </div>
+
+            <!-- Right Pane: Active Assembly Details -->
+            <div class="assembly-editor-pane">
+              
+              <!-- General Info Card -->
+              <div class="assembly-section-card">
+                <div class="form-row" style="margin-bottom: 0.75rem;">
+                  <div class="form-group" style="flex: 2;">
+                    <label for="inpAssVersion">Assembly Version ID</label>
+                    <input type="text" id="inpAssVersion" class="form-input" style="font-weight: 700;" value="${curr["Assembly Version"] || ""}">
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                      <label for="inpAssTotalWeight" style="margin: 0;">Total Mass (g)</label>
+                      <button type="button" class="btn-action" style="font-size: 0.68rem; padding: 1px 6px;" onclick="window.syncLiveMassToInput()">Auto Sum</button>
+                    </div>
+                    <input type="number" step="0.1" id="inpAssTotalWeight" class="form-input" value="${parseFloat(curr["Total Weight (g)"] || 0).toFixed(1)}">
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                  <label for="inpAssDescription">Description</label>
+                  <input type="text" id="inpAssDescription" class="form-input" placeholder="Technical purpose and differences of this assembly" value="${curr.Description || ""}">
+                </div>
+
+                <!-- Live Mass Status Banner -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem 0.85rem;">
+                  <div>
+                    <span style="font-size: 0.76rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Selected Components Sum:</span>
+                    <strong id="liveAssWeight" style="margin-left: 0.5rem; font-size: 0.95rem; color: var(--text-main);">0.0 g</strong>
+                  </div>
+                  <div>
+                    <span id="liveAssDelta" style="font-size: 0.82rem; font-weight: 600;"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Component Pickers: Upright (UP) -->
+              <div class="assembly-section-card">
+                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-red); margin-bottom: 0.6rem;">
+                  Upright Assembly (UP)
+                </div>
+                ${renderCustomPartPicker("UP_01", "Main Upright Body")}
+                ${renderCustomPartPicker("UP_02", "Upright Lid")}
+                ${renderCustomPartPicker("UP_03", "Internal Front Plate")}
+                ${renderCustomPartPicker("UP_04", "Backplate")}
+              </div>
+
+              <!-- Component Pickers: Hub (HB) -->
+              <div class="assembly-section-card">
+                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-red); margin-bottom: 0.6rem;">
+                  Hub Assembly (HB)
+                </div>
+                ${renderCustomPartPicker("HB_01", "Wheel Hub")}
+                ${renderCustomPartPicker("HB_02", "Hub Lid")}
+                ${renderCustomPartPicker("HB_07", "Outer Ring Spacer")}
+              </div>
+
+              <!-- Component Pickers: Gearbox (GB) -->
+              <div class="assembly-section-card">
+                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-red); margin-bottom: 0.6rem;">
+                  Transmission (GB)
+                </div>
+                ${renderCustomPartPicker("TD", "Transmission Drivetrain")}
+              </div>
+
+              <!-- Component Pickers: OEM Bearings & Seals -->
+              <div class="assembly-section-card">
+                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-red); margin-bottom: 0.6rem;">
+                  OEM Bearings & Seals
+                </div>
+                ${renderOemPicker("Inner Bearing", "Motor-side Bearing", (name) => name.includes("618") || name.includes("718"))}
+                ${renderOemPicker("Outer Bearing", "Rim-side Bearing", (name) => name.includes("618") || name.includes("718"))}
+                ${renderOemPicker("Seal", "Transmission Oil Seal", (name) => name.includes("HMSA") || name.includes("X"))}
+              </div>
+
+              <!-- Actions Toolbar -->
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; gap: 0.5rem;">
+                  <button type="button" class="btn-action" onclick="window.duplicateAssembly()">Duplicate</button>
+                  <button type="button" class="btn-action danger" onclick="window.deleteActiveAssembly()">Delete Assembly</button>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button type="button" class="btn-secondary" onclick="window.closeModal()">Close</button>
+                  <button type="button" class="btn-primary" onclick="window.saveActiveAssembly()">Save Assembly</button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
       </div>
     `;
 
-    document.getElementById("btnSaveAss").onclick = async () => {
-      assembliesData = getCurrentModalAssemblies();
-      try {
-        await window.DTCloud.commitFile("data/assemblies.json", assembliesData, "Update assemblies configuration");
-        showToast("Assemblies saved successfully!");
-        window.closeModal();
-        renderAssemblyView();
-      } catch (e) {
-        alert("Error saving assemblies: " + e.message);
-      }
-    };
+    window.updateLiveAssemblyMass();
   }
-
-  function getCurrentModalAssemblies() {
-    const tbody = document.getElementById("assTableBody");
-    if (!tbody) return assembliesData;
-    const rows = tbody.querySelectorAll("tr");
-    const result = [];
-    rows.forEach((r, i) => {
-      const ver = document.getElementById(`assVer_${i}`);
-      const weight = document.getElementById(`assWeight_${i}`);
-      const desc = document.getElementById(`assDesc_${i}`);
-      const config = document.getElementById(`assConfig_${i}`);
-      if (ver) {
-        const origDate = (assembliesData[i] && assembliesData[i].Date) ? assembliesData[i].Date : new Date().toISOString().replace("T", " ").substring(0, 19);
-        result.push({
-          "Assembly Version": ver.value.trim(),
-          "Date": origDate,
-          "Total Weight (g)": parseFloat(weight ? weight.value : 0) || 0,
-          "Description": desc ? desc.value.trim() : "",
-          "Part Configuration": config ? config.value.trim() : ""
-        });
-      }
-    });
-    return result;
-  }
-
-  window.addAssemblyRow = function () {
-    const list = getCurrentModalAssemblies();
-    const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
-    list.push({
-      "Assembly Version": "New Version",
-      "Date": nowStr,
-      "Total Weight (g)": 0,
-      "Description": "",
-      "Part Configuration": ""
-    });
-    renderAssembliesModalContent(list);
-  };
-
-  window.removeAssemblyRow = function (idx) {
-    const list = getCurrentModalAssemblies();
-    list.splice(idx, 1);
-    renderAssembliesModalContent(list);
-  };
-
-  // Global Navigation Shortcut
+\n  // Global Navigation Shortcut
   window.navigateToPart = function (partName) {
     if (partName !== currentView) {
       currentPartName = null;
