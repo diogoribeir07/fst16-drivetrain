@@ -3473,7 +3473,8 @@
 
     window.updateLiveAssemblyMass();
   }
-\n  // Global Navigation Shortcut
+
+  // Global Navigation Shortcut
   window.navigateToPart = function (partName) {
     if (partName !== currentView) {
       currentPartName = null;
