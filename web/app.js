@@ -17,6 +17,8 @@
   let currentPartName = null;
   let selectedEvalVersion = null;
   let selectedRefVersion = null;
+  let selectedEvalAssVersion = null;
+  let selectedRefAssVersion = null;
   let activeGalleryIndex = 0;
   let reqActiveTab = "list"; // 'list' or 'diagrams'
   let activeFeaLc = "LC1";
@@ -744,29 +746,177 @@
     }
   }
 
+  function resolvePartInfo(partKey, verStr) {
+    if (!verStr) return { version: "", weight: 0, partName: partKey, subassembly: "-" };
+    const vClean = normVer(verStr).toLowerCase();
+
+    // 1. Try custom part matching Part Name === partKey
+    const customIters = partsData.filter((p) => p["Part Name"] === partKey);
+    if (customIters.length) {
+      const matched = customIters.find((p) => normVer(p.Version).toLowerCase() === vClean);
+      if (matched) {
+        return {
+          version: matched.Version,
+          weight: parseFloat(matched["Weight (g)"]) || 0,
+          partName: partKey,
+          subassembly: matched.Subassembly || "Drivetrain",
+          description: matched.Description || ""
+        };
+      }
+      return {
+        version: verStr,
+        weight: 0,
+        partName: partKey,
+        subassembly: customIters[0].Subassembly || "-"
+      };
+    }
+
+    // 2. Try OEM part (Bearing / Seal / Other) matching Part Name === verStr
+    const oemParts = partsData.filter(
+      (p) => (p.Subassembly || "") === "Other" || partKey.includes("Bearing") || partKey.includes("Seal")
+    );
+    const matchedOem = oemParts.find((p) => normVer(p["Part Name"]).toLowerCase() === vClean);
+    if (matchedOem) {
+      return {
+        version: matchedOem["Part Name"],
+        weight: parseFloat(matchedOem["Weight (g)"]) || 0,
+        partName: partKey,
+        subassembly: "Other",
+        description: matchedOem.Description || ""
+      };
+    }
+
+    return { version: verStr, weight: 0, partName: partKey, subassembly: "-" };
+  }
+
+  function renderAssemblyBreakdownRows(config) {
+    if (!config || !Object.keys(config).length) {
+      return `<tr><td colspan="3" style="color: var(--text-dim); text-align: center;">No parts configured</td></tr>`;
+    }
+    return Object.keys(config)
+      .map((k) => {
+        const v = config[k];
+        const info = resolvePartInfo(k, v);
+        return `
+          <tr>
+            <td><strong style="color: #ffffff;">${k}</strong></td>
+            <td>${formatVersion(v)}</td>
+            <td class="mono">${info.weight > 0 ? info.weight.toFixed(1) + " g" : "-"}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
+  window.changeAssemblyCompare = function () {
+    const elEval = document.getElementById("selectEvalAss");
+    const elRef = document.getElementById("selectRefAss");
+    if (elEval) selectedEvalAssVersion = elEval.value;
+    if (elRef) selectedRefAssVersion = elRef.value;
+    renderAssemblyView();
+  };
+
   // 1. Wheel Assembly View
   function renderAssemblyView() {
-    const partLatestMap = new Map();
-    partsData.forEach((p) => {
-      partLatestMap.set(p["Part Name"], p);
+    if (!assembliesData || !assembliesData.length) {
+      let emptyHtml = `
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Wheel Assembly</h1>
+            <p class="page-subtitle">Assembly comparison and subsystem breakdown</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-action" onclick="window.exportExcelWorkbook()">Export Excel</button>
+            ${isEditor() ? `
+            <button class="btn-action primary" onclick="window.openManageAssembliesModal()">Manage Assemblies</button>
+            <button class="btn-action" onclick="window.openNewPartModal('')">New Part</button>
+            ` : ""}
+          </div>
+        </div>
+        <div class="inline-tab-card" style="padding: 2rem; text-align: center;">
+          <p style="color: var(--text-muted); margin-bottom: 1rem;">No assemblies configured in tracker.</p>
+          ${isEditor() ? `<button class="btn-action primary" onclick="window.createNewAssembly()">Create Assembly</button>` : ""}
+        </div>
+      `;
+      elContentArea.innerHTML = emptyHtml;
+      return;
+    }
+
+    // Ensure selected versions exist
+    if (!selectedEvalAssVersion || !assembliesData.some((a) => a["Assembly Version"] === selectedEvalAssVersion)) {
+      selectedEvalAssVersion = assembliesData[0]["Assembly Version"];
+    }
+    if (!selectedRefAssVersion || !assembliesData.some((a) => a["Assembly Version"] === selectedRefAssVersion)) {
+      const fst15Ass = assembliesData.find((a) => (a["Assembly Version"] || "").toUpperCase().includes("FST15"));
+      selectedRefAssVersion = fst15Ass ? fst15Ass["Assembly Version"] : assembliesData[assembliesData.length - 1]["Assembly Version"];
+    }
+
+    const evalAss = assembliesData.find((a) => a["Assembly Version"] === selectedEvalAssVersion) || assembliesData[0];
+    const refAss = assembliesData.find((a) => a["Assembly Version"] === selectedRefAssVersion) || assembliesData[assembliesData.length - 1];
+
+    const evalConfig = parseAssemblyConfig(evalAss["Part Configuration"]);
+    const refConfig = parseAssemblyConfig(refAss["Part Configuration"]);
+
+    const standardKeys = [
+      { key: "UP_01", label: "Upright Body", sub: "UP" },
+      { key: "UP_02", label: "Upright Lid", sub: "UP" },
+      { key: "UP_03", label: "Front Plate", sub: "UP" },
+      { key: "UP_04", label: "Backplate", sub: "UP" },
+      { key: "HB_01", label: "Wheel Hub", sub: "HB" },
+      { key: "HB_02", label: "Hub Lid", sub: "HB" },
+      { key: "HB_07", label: "Ring Spacer", sub: "HB" },
+      { key: "TD", label: "Transmission", sub: "TD" },
+      { key: "Inner Bearing", label: "Inner Bearing", sub: "Other" },
+      { key: "Outer Bearing", label: "Outer Bearing", sub: "Other" },
+      { key: "Seal", label: "Shaft Seal", sub: "Other" }
+    ];
+
+    const configuredKeys = new Set([...Object.keys(evalConfig), ...Object.keys(refConfig)]);
+    const allRows = [];
+    standardKeys.forEach((item) => {
+      if (configuredKeys.has(item.key)) {
+        allRows.push(item);
+        configuredKeys.delete(item.key);
+      }
+    });
+    configuredKeys.forEach((k) => {
+      allRows.push({ key: k, label: k, sub: "Other" });
     });
 
-    let totalWeight = 0;
-    partLatestMap.forEach((p) => {
-      const w = parseFloat(p["Weight (g)"]) || 0;
-      totalWeight += w;
+    let evalTotalWeight = 0;
+    let refTotalWeight = 0;
+    const rowComparisons = allRows.map((r) => {
+      const ep = resolvePartInfo(r.key, evalConfig[r.key]);
+      const rp = resolvePartInfo(r.key, refConfig[r.key]);
+      evalTotalWeight += ep.weight;
+      refTotalWeight += rp.weight;
+      const diff = ep.weight - rp.weight;
+      const pct = rp.weight > 0 ? (diff / rp.weight) * 100 : 0;
+      return {
+        ...r,
+        evalPart: ep,
+        refPart: rp,
+        diff,
+        pct
+      };
     });
 
-    const targetWeight = 4800; // 4.8 kg target
-    const fst15Baseline = 5040; // 5.04 kg baseline
-    const diffVsFst15 = totalWeight - fst15Baseline;
-    const diffVsTarget = totalWeight - targetWeight;
+    if (evalTotalWeight === 0 && evalAss["Total Weight (g)"]) {
+      evalTotalWeight = parseFloat(evalAss["Total Weight (g)"]) || 0;
+    }
+    if (refTotalWeight === 0 && refAss["Total Weight (g)"]) {
+      refTotalWeight = parseFloat(refAss["Total Weight (g)"]) || 0;
+    }
+
+    const totalDiff = evalTotalWeight - refTotalWeight;
+    const isTotalZero = Math.abs(totalDiff) < 1e-7;
+    const totalDeltaClass = isTotalZero ? "delta-neutral" : (totalDiff <= 0 ? "delta-good" : "delta-bad");
 
     let html = `
       <div class="page-header">
         <div>
           <h1 class="page-title">Wheel Assembly</h1>
-          <p class="page-subtitle">Global mass tracking and subsystem breakdown</p>
+          <p class="page-subtitle">Assembly comparison and subsystem breakdown</p>
         </div>
         <div class="header-actions">
           <button class="btn-action" onclick="window.exportExcelWorkbook()">Export Excel</button>
@@ -779,73 +929,139 @@
 
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">Unsprung Mass</div>
-          <div class="metric-value">${(totalWeight / 1000).toFixed(3)} kg</div>
-          <div class="metric-sub delta-neutral">${totalWeight.toFixed(1)} g total</div>
+          <div class="metric-label">Evaluated Assembly</div>
+          <div class="metric-value">${evalTotalWeight.toFixed(1)} g</div>
+          <div class="metric-sub delta-neutral">${(evalTotalWeight / 1000).toFixed(3)} kg &bull; ${evalAss["Assembly Version"]}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">FST15 Baseline</div>
-          <div class="metric-value ${diffVsFst15 <= 0 ? "delta-good" : "delta-bad"}">
-            ${diffVsFst15 <= 0 ? "" : "+"}${(diffVsFst15 / 1000).toFixed(3)} kg
-          </div>
-          <div class="metric-sub ${diffVsFst15 <= 0 ? "delta-good" : "delta-bad"}">
-            ${((diffVsFst15 / fst15Baseline) * 100).toFixed(1)}% vs 5.040 kg
-          </div>
+          <div class="metric-label">Baseline Assembly</div>
+          <div class="metric-value">${refTotalWeight.toFixed(1)} g</div>
+          <div class="metric-sub delta-neutral">${(refTotalWeight / 1000).toFixed(3)} kg &bull; ${refAss["Assembly Version"]}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Target Margin</div>
-          <div class="metric-value ${diffVsTarget <= 0 ? "delta-good" : "delta-bad"}">
-            ${diffVsTarget <= 0 ? "" : "+"}${(diffVsTarget / 1000).toFixed(3)} kg
+          <div class="metric-label">Assembly Delta</div>
+          <div class="metric-value ${totalDeltaClass}">
+            ${totalDiff <= 0 ? "" : "+"}${totalDiff.toFixed(1)} g
           </div>
-          <div class="metric-sub ${diffVsTarget <= 0 ? "delta-good" : "delta-bad"}">
-            Target: ${(targetWeight / 1000).toFixed(3)} kg
+          <div class="metric-sub ${totalDeltaClass}">
+            ${refTotalWeight > 0 ? ((totalDiff / refTotalWeight) * 100).toFixed(1) + "%" : "0.0%"} vs Baseline
           </div>
         </div>
       </div>
 
-      <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Component Mass</h2>
+      <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap;">
+        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
+          Evaluate Assembly:
+          <select id="selectEvalAss" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;" onchange="window.changeAssemblyCompare()">
+            ${assembliesData.map((a) => `<option value="${a["Assembly Version"]}" ${a["Assembly Version"] === evalAss["Assembly Version"] ? "selected" : ""}>${a["Assembly Version"]} (${parseFloat(a["Total Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
+          </select>
+        </label>
+        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
+          Baseline Assembly:
+          <select id="selectRefAss" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;" onchange="window.changeAssemblyCompare()">
+            ${assembliesData.map((a) => `<option value="${a["Assembly Version"]}" ${a["Assembly Version"] === refAss["Assembly Version"] ? "selected" : ""}>${a["Assembly Version"]} (${parseFloat(a["Total Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
+          </select>
+        </label>
+      </div>
+
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Assembly Comparison</h2>
       <div class="card-table-wrapper">
         <table class="styled-table">
           <thead>
             <tr>
-              <th>Subassembly</th>
-              <th>Part Name</th>
-              <th>Version</th>
-              <th>Weight (g)</th>
-              <th>Description</th>
+              <th>Subsystem / Part</th>
+              <th>${evalAss["Assembly Version"]}</th>
+              <th>${refAss["Assembly Version"]}</th>
+              <th>Diff (g)</th>
+              <th>%</th>
             </tr>
           </thead>
           <tbody>
     `;
 
-    const subOrder = ["UP", "HB", "GB", "TD", "Other"];
-    const getSubPriority = (sub) => {
-      const idx = subOrder.indexOf(sub);
-      return idx === -1 ? 999 : idx;
-    };
+    rowComparisons.forEach((r) => {
+      const isCustom = partsData.some((p) => p["Part Name"] === r.key);
+      const isDiffZero = Math.abs(r.diff) < 1e-7;
+      const diffClass = isDiffZero ? "delta-neutral" : (r.diff <= 0 ? "delta-good" : "delta-bad");
+      const navClick = isCustom ? `style="cursor: pointer;" onclick="window.navigateToPart('${r.key}')"` : "";
 
-    Array.from(partLatestMap.values())
-      .sort((a, b) => {
-        const pA = getSubPriority(a.Subassembly || "Other");
-        const pB = getSubPriority(b.Subassembly || "Other");
-        if (pA !== pB) return pA - pB;
-        return (a["Part Name"] || "").localeCompare(b["Part Name"] || "");
-      })
-      .forEach((p) => {
-        const w = parseFloat(p["Weight (g)"]) || 0;
-        html += `
-          <tr style="cursor: pointer;" onclick="window.navigateToPart('${p["Part Name"]}')">
-            <td><strong>${p.Subassembly || "-"}</strong></td>
-            <td><span style="color: #ffffff; font-weight: 600;">${p["Part Name"]}</span></td>
-            <td>${formatVersion(p.Version)}</td>
-            <td class="mono"><strong>${w.toFixed(1)} g</strong></td>
-            <td style="color: var(--text-muted); font-size: 0.82rem;">${(p.Description || "").slice(0, 60)}...</td>
-          </tr>
-        `;
-      });
+      let pctLabel = "--";
+      if (r.refPart.weight > 0) {
+        pctLabel = `${r.diff <= 0 ? "" : "+"}${r.pct.toFixed(1)}%`;
+      } else if (r.evalPart.weight > 0) {
+        pctLabel = "New";
+      }
+
+      html += `
+        <tr ${navClick}>
+          <td>
+            <strong>${r.sub}</strong> &bull; <span style="color: #ffffff; font-weight: 600;">${r.key}</span>
+            <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 0.35rem;">(${r.label})</span>
+          </td>
+          <td class="mono">
+            ${r.evalPart.weight > 0 ? `${formatVersion(r.evalPart.version)} (${r.evalPart.weight.toFixed(1)} g)` : `<span style="color: var(--text-dim);">--</span>`}
+          </td>
+          <td class="mono">
+            ${r.refPart.weight > 0 ? `${formatVersion(r.refPart.version)} (${r.refPart.weight.toFixed(1)} g)` : `<span style="color: var(--text-dim);">--</span>`}
+          </td>
+          <td class="mono ${diffClass}">
+            <strong>${r.diff <= 0 ? "" : "+"}${r.diff.toFixed(1)} g</strong>
+          </td>
+          <td class="mono ${diffClass}">
+            <strong>${pctLabel}</strong>
+          </td>
+        </tr>
+      `;
+    });
+
     html += `
           </tbody>
+          <tfoot>
+            <tr style="background: rgba(255, 255, 255, 0.04); font-weight: 700; border-top: 2px solid var(--border-color);">
+              <td><strong>Total Assembly Weight</strong></td>
+              <td class="mono"><strong>${evalTotalWeight.toFixed(1)} g</strong></td>
+              <td class="mono"><strong>${refTotalWeight.toFixed(1)} g</strong></td>
+              <td class="mono ${totalDeltaClass}"><strong>${totalDiff <= 0 ? "" : "+"}${totalDiff.toFixed(1)} g</strong></td>
+              <td class="mono ${totalDeltaClass}"><strong>${refTotalWeight > 0 ? ((totalDiff / refTotalWeight) * 100).toFixed(1) + "%" : "0.0%"}</strong></td>
+            </tr>
+          </tfoot>
         </table>
+      </div>
+
+      <h3 style="font-size: 1rem; margin: 1.5rem 0 0.75rem;">Side Comparison</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+        <div class="inline-tab-card">
+          <h4 style="margin-bottom: 0.35rem; color: var(--text-muted);">Baseline: ${refAss["Assembly Version"]}</h4>
+          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Total: ${refTotalWeight.toFixed(1)} g | Date: ${refAss.Date || "-"}</div>
+          <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${refAss.Description || "No description recorded."}</p>
+          <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem; color: var(--text-muted);">Part Breakdown</h5>
+          <div class="card-table-wrapper">
+            <table class="styled-table">
+              <thead>
+                <tr><th>Component</th><th>Version</th><th>Weight</th></tr>
+              </thead>
+              <tbody>
+                ${renderAssemblyBreakdownRows(refConfig)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="inline-tab-card">
+          <h4 style="margin-bottom: 0.35rem; color: var(--accent-red);">Evaluated: ${evalAss["Assembly Version"]}</h4>
+          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Total: ${evalTotalWeight.toFixed(1)} g | Date: ${evalAss.Date || "-"}</div>
+          <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${evalAss.Description || "No description recorded."}</p>
+          <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem; color: var(--text-muted);">Part Breakdown</h5>
+          <div class="card-table-wrapper">
+            <table class="styled-table">
+              <thead>
+                <tr><th>Component</th><th>Version</th><th>Weight</th></tr>
+              </thead>
+              <tbody>
+                ${renderAssemblyBreakdownRows(evalConfig)}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     `;
 
