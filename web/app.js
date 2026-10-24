@@ -19,6 +19,11 @@
   let activeGalleryIndex = 0;
   let reqActiveTab = "list"; // 'list' or 'diagrams'
   let activeFeaLc = "LC1";
+  let activePartTab = "tabOverview";
+  let newIterLcImages = {};
+  let editIterLcImages = {};
+  let newIterSchematic = null;
+  let editIterSchematic = null;
 
   // DOM Elements
   const elSidebarNav = document.getElementById("sidebarNav");
@@ -99,6 +104,215 @@
         reader.readAsDataURL(fileOrDataUrl);
       }
     });
+  }
+
+  // Toast notification helper
+  function showToast(message, duration = 3500) {
+    const existing = document.getElementById("ocrToastNotification");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.id = "ocrToastNotification";
+    toast.className = "ocr-toast";
+    toast.innerHTML = `<span>${message}</span>`;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(20px)";
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
+
+  // Preprocess image on canvas and run OCR via Tesseract.js
+  async function extractNtopFeaFromImage(fileOrDataUrl, targetPart) {
+    if (typeof Tesseract === "undefined") {
+      showToast("OCR Error: Tesseract.js library not loaded.");
+      return { detectedLc: null, detectedDisp: null, fullImage: null };
+    }
+
+    showToast("Analyzing FEA screenshot with OCR...", 6000);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          const w = img.width;
+          const h = img.height;
+
+          // Crop top-right legend (w * 0.60 to w, and 0.12 to 0.75 * h)
+          const cropX = Math.floor(w * 0.60);
+          const cropY = Math.floor(h * 0.12);
+          const cropW = w - cropX;
+          const cropH = Math.floor(h * 0.65);
+
+          const canvas = document.createElement("canvas");
+          const scale = 2.5;
+          canvas.width = Math.round(cropW * scale);
+          canvas.height = Math.round(cropH * scale);
+          const ctx = canvas.getContext("2d");
+
+          // Draw cropped & scaled region
+          ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+
+          // Invert & enhance contrast to optimize for OCR (matches Python ImageOps.invert)
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const d = imgData.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            // Invert: dark background with bright text -> light background with dark text
+            const inv = 255 - gray;
+            const contrast = (inv - 128) * 1.6 + 128;
+            const finalVal = Math.min(255, Math.max(0, contrast));
+            d[i] = finalVal;
+            d[i + 1] = finalVal;
+            d[i + 2] = finalVal;
+          }
+          ctx.putImageData(imgData, 0, 0);
+
+          // Run OCR recognition
+          const res = await Tesseract.recognize(canvas, "eng");
+          const text = (res && res.data && res.data.text) ? res.data.text : "";
+          console.log("OCR Recognized Text:\n", text);
+
+          // Match Load Case keywords
+          const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+          const firstLines = lines.slice(0, 5).join(" ").toLowerCase();
+          const nospace = firstLines.replace(/[\s\-_]/g, "");
+
+          let detectedLc = null;
+          if (firstLines.includes("pure") && firstLines.includes("brak")) {
+            detectedLc = "LC1";
+          } else if (firstLines.includes("pure") && firstLines.includes("acc")) {
+            detectedLc = "LC2";
+          } else if (firstLines.includes("pure") && (firstLines.includes("corn") || firstLines.includes("com"))) {
+            detectedLc = "LC3";
+          } else if (nospace.includes("b+c2") || nospace.includes("bc2") || (firstLines.includes("brak") && (nospace.includes("cornering2") || nospace.includes("comering2")))) {
+            detectedLc = "LC5";
+          } else if (nospace.includes("b+c1") || nospace.includes("bc1") || nospace.includes("b+c") || (firstLines.includes("brak") && (first_lines.includes("corn") || first_lines.includes("com")))) {
+            detectedLc = "LC4";
+          } else if (nospace.includes("a+c2") || nospace.includes("ac2") || (firstLines.includes("acc") && (nospace.includes("cornering2") || nospace.includes("comering2")))) {
+            detectedLc = "LC7";
+          } else if (nospace.includes("a+c1") || nospace.includes("ac1") || nospace.includes("a+c") || (firstLines.includes("acc") && (first_lines.includes("corn") || first_lines.includes("com")))) {
+            detectedLc = "LC6";
+          } else if (targetPart !== "HB_01") {
+            if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("result2") || nospace.includes("res2")) {
+              detectedLc = "LC9";
+            } else if (nospace.includes("1kn") || nospace.includes("ikn") || nospace.includes("result1")) {
+              detectedLc = "LC8";
+            }
+          }
+
+          // Extract scientific notation or decimal displacement numbers
+          const nums = [];
+          const sciRegex = /([1-9])[.\-]?(\d{3,5})\s*(?:e\s*[\-+]|[\+&]|\s*-\s*)0([0-4])/gi;
+          let match;
+          while ((match = sciRegex.exec(text)) !== null) {
+            const mant = parseFloat(match[1] + "." + match[2]);
+            const exp = parseInt(match[3], 10);
+            nums.push(mant * Math.pow(10, -exp));
+          }
+
+          if (!nums.length) {
+            const decRegex = /\b0\.(\d{3,5})\b/g;
+            while ((match = decRegex.exec(text)) !== null) {
+              nums.push(parseFloat(match[0]));
+            }
+          }
+
+          let detectedDisp = null;
+          const isHB = targetPart === "HB_01";
+          const partDecimals = isHB ? 5 : 4;
+
+          if (nums.length) {
+            const rawMax = nums[0]; // Top value of legend scale is peak displacement
+            const factor = Math.pow(10, partDecimals);
+            detectedDisp = Math.floor(rawMax * factor + 1e-9) / factor;
+          }
+
+          // Full image as compressed data URL for saving as LC contour
+          const fullCanvas = document.createElement("canvas");
+          const maxDim = 1200;
+          let outW = w;
+          let outH = h;
+          if (w > maxDim || h > maxDim) {
+            const r = Math.min(maxDim / w, maxDim / h);
+            outW = Math.round(w * r);
+            outH = Math.round(h * r);
+          }
+          fullCanvas.width = outW;
+          fullCanvas.height = outH;
+          const fullCtx = fullCanvas.getContext("2d");
+          fullCtx.drawImage(img, 0, 0, outW, outH);
+          const fullDataUrl = fullCanvas.toDataURL("image/png");
+
+          if (detectedLc && detectedDisp !== null) {
+            showToast(`Detected ${detectedLc}: ${detectedDisp.toFixed(partDecimals)} mm`);
+          } else if (detectedDisp !== null) {
+            showToast(`Detected displacement: ${detectedDisp.toFixed(partDecimals)} mm`);
+          } else if (detectedLc) {
+            showToast(`Detected ${detectedLc}, but could not read displacement scale.`);
+          } else {
+            showToast("Could not identify FEA load case or displacement.");
+          }
+
+          resolve({ detectedLc, detectedDisp, fullImage: fullDataUrl });
+        } catch (err) {
+          console.error("OCR Exception:", err);
+          showToast("OCR processing failed: " + err.message);
+          resolve({ detectedLc: null, detectedDisp: null, fullImage: null });
+        }
+      };
+      img.onerror = () => {
+        showToast("Error loading image for OCR.");
+        resolve({ detectedLc: null, detectedDisp: null, fullImage: null });
+      };
+
+      if (typeof fileOrDataUrl === "string") {
+        img.src = fileOrDataUrl;
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => (img.src = e.target.result);
+        reader.onerror = () => resolve({ detectedLc: null, detectedDisp: null, fullImage: null });
+        reader.readAsDataURL(fileOrDataUrl);
+      }
+    });
+  }
+
+  // Handle OCR from pasted or dropped image
+  async function handleFeaScreenshotPasted(fileOrDataUrl, targetPart, mode = "new") {
+    const res = await extractNtopFeaFromImage(fileOrDataUrl, targetPart);
+    const isHB = targetPart === "HB_01";
+    const partDecimals = isHB ? 5 : 4;
+
+    if (res.detectedLc && res.detectedDisp !== null) {
+      const inpId = mode === "new" ? `newLC_${res.detectedLc}` : `editLC_${res.detectedLc}`;
+      const inp = document.getElementById(inpId);
+      if (inp) {
+        inp.value = res.detectedDisp.toFixed(partDecimals);
+        inp.style.borderColor = "var(--delta-green)";
+        inp.style.backgroundColor = "rgba(34, 197, 94, 0.1)";
+        setTimeout(() => {
+          inp.style.borderColor = "";
+          inp.style.backgroundColor = "";
+        }, 1800);
+      }
+
+      if (mode === "new") {
+        newIterLcImages[res.detectedLc] = res.fullImage;
+      } else {
+        editIterLcImages[res.detectedLc] = res.fullImage;
+      }
+
+      const badgeId = `${mode}_badge_${res.detectedLc}`;
+      const badge = document.getElementById(badgeId);
+      if (badge) {
+        badge.style.display = "inline-block";
+        badge.textContent = "Attached";
+      }
+    } else if (res.detectedDisp !== null) {
+      showToast(`Detected ${res.detectedDisp.toFixed(partDecimals)} mm. Enter into target LC.`);
+    }
   }
 
   // URL Hash token auto-configuration
@@ -211,17 +425,25 @@
       </div>
     `;
 
-    const subOrder = ["Upright", "Hub", "Gearbox", "OEM Components"];
+    const subOrder = ["UP", "HB", "GB", "Other"];
+    const subDisplayNames = {
+      "UP": "UP",
+      "HB": "HB",
+      "GB": "GB",
+      "Other": "OTHER"
+    };
     const allSubs = Array.from(new Set([...subOrder, ...Object.keys(partsBySub)]));
 
     allSubs.forEach((sub) => {
       const parts = Array.from(partsBySub[sub] || []).sort();
       if (!parts.length) return;
 
+      const displayName = subDisplayNames[sub] || (sub.toUpperCase ? sub.toUpperCase() : sub);
+
       html += `
         <div class="sidebar-section">
           <div class="section-label">
-            <span>${sub}</span>
+            <span>${displayName}</span>
             ${isEditor() ? `<button class="role-action-btn" onclick="window.openNewPartModal('${sub}')">+ Part</button>` : ""}
           </div>
       `;
@@ -650,6 +872,41 @@
     const refWeight = parseFloat(refRow["Weight (g)"]) || 0;
     const weightDiff = evalWeight - refWeight;
 
+    const isHB = partName === "HB_01";
+    const isUP = partName === "UP_01";
+    const partLcs = isUP
+      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
+      : isHB
+      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
+      : [];
+
+    const descMap = {
+      LC1: "Pure Braking",
+      LC2: "Pure Acceleration",
+      LC3: "Pure Cornering",
+      LC4: "Braking + Cornering 1",
+      LC5: "Braking + Cornering 2",
+      LC6: "Acceleration + Cornering 1",
+      LC7: "Acceleration + Cornering 2",
+      LC8: "1kN Fy",
+      LC9: "-1kN Fy"
+    };
+
+    const latest = iters[iters.length - 1];
+    const nextVer = incrementVersion(latest.Version);
+
+    // Parse stiffness data for new/edit
+    let evalStiff = {};
+    try {
+      if (evalRow["Stiffness Data"]) evalStiff = JSON.parse(evalRow["Stiffness Data"]);
+    } catch (e) {}
+
+    // Related requirements
+    const relatedReqs = requirementsData.filter((r) => {
+      const rel = String(r["Related Parts"] || "");
+      return rel.includes(partName);
+    });
+
     let html = `
       <div class="page-header">
         <div>
@@ -657,12 +914,6 @@
           <p class="page-subtitle">${evalRow.Subassembly || "Drivetrain"} &bull; Latest: ${formatVersion(iters[iters.length - 1].Version)}</p>
         </div>
         <div class="header-actions">
-          ${isEditor() ? `
-          <button class="btn-action primary" onclick="window.openNewIterationModal('${partName}')">New Iteration</button>
-          <button class="btn-action" onclick="window.openEditIterationModal('${partName}', '${evalRow.Version}')">Edit Iteration</button>
-          <button class="btn-action danger" onclick="window.deleteIteration('${partName}', '${evalRow.Version}')">Delete Iteration</button>
-          <button class="btn-action danger" onclick="window.deletePart('${partName}')">Delete Part</button>
-          ` : ""}
           <button class="btn-action" onclick="window.exportExcelWorkbook()">Export Excel</button>
         </div>
       </div>
@@ -690,31 +941,33 @@
       </div>
 
       <div class="tabs-header">
-        <button class="tab-btn active" data-tab="tabOverview">Overview</button>
-        <button class="tab-btn" data-tab="tabSpecs">Specifications</button>
-        <button class="tab-btn" data-tab="tabFEA">FEA Stiffness</button>
-        <button class="tab-btn" data-tab="tabImage">Schematic</button>
+        <button class="tab-btn ${activePartTab === "tabOverview" ? "active" : ""}" data-tab="tabOverview">Overview</button>
+        <button class="tab-btn ${activePartTab === "tabJustification" ? "active" : ""}" data-tab="tabJustification">Justification</button>
+        <button class="tab-btn ${activePartTab === "tabTolerances" ? "active" : ""}" data-tab="tabTolerances">Tolerances</button>
+        <button class="tab-btn ${activePartTab === "tabNewIter" ? "active" : ""}" data-tab="tabNewIter">New Iteration</button>
+        <button class="tab-btn ${activePartTab === "tabEdit" ? "active" : ""}" data-tab="tabEdit">Edit</button>
+        <button class="tab-btn ${activePartTab === "tabSchematic" ? "active" : ""}" data-tab="tabSchematic">Schematic</button>
       </div>
 
       <!-- Tab: Overview -->
-      <div class="tab-pane active" id="tabOverview">
+      <div class="tab-pane ${activePartTab === "tabOverview" ? "active" : ""}" id="tabOverview">
         ${iters.length > 1 ? `
         <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap;">
           <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-            Compare:
+            Evaluate Iteration:
             <select id="selectEvalVer" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;">
               ${iters.map((it) => `<option value="${it.Version}" ${String(it.Version) === String(evalRow.Version) ? "selected" : ""}>${formatVersion(it.Version)} (${parseFloat(it["Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
             </select>
           </label>
           <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-            Against Ref:
+            Baseline Iteration:
             <select id="selectRefVer" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;">
               ${iters.map((it) => `<option value="${it.Version}" ${String(it.Version) === String(refRow.Version) ? "selected" : ""}>${formatVersion(it.Version)} (${parseFloat(it["Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
             </select>
           </label>
         </div>
         ` : `
-        <div style="margin-bottom: 1.5rem; padding: 0.6rem 0.9rem; background: rgba(255, 75, 75, 0.08); border-left: 3px solid var(--accent-red); border-radius: 4px; font-size: 0.85rem; color: var(--text-muted);">
+        <div style="margin-bottom: 1.5rem; padding: 0.6rem 0.9rem; background: rgba(225, 29, 72, 0.08); border-left: 3px solid var(--accent-red); border-radius: 4px; font-size: 0.85rem; color: var(--text-muted);">
           Single iteration available (${formatVersion(evalRow.Version)}).
         </div>
         `}
@@ -747,62 +1000,301 @@
           </table>
         </div>
 
-        ${renderFEATable(evalRow, refRow)}
-      </div>
-
-      <!-- Tab: Specifications -->
-      <div class="tab-pane" id="tabSpecs">
-        <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Specifications</h3>
-        <div class="card-table-wrapper">
-          <table class="styled-table">
-            <thead>
-              <tr>
-                <th>Property</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderSpecsRows(evalRow.Specifications)}
-            </tbody>
-          </table>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; margin: 1.5rem 0 0.5rem;">
-          <h3 style="font-size: 1rem;">Manufacturing GD&T</h3>
-          ${isEditor() ? `<button class="btn-action" onclick="window.openTolerancesModal('${partName}')">Edit Tolerances</button>` : ""}
-        </div>
-        <div class="card-table-wrapper">
-          <table class="styled-table">
-            <thead>
-              <tr>
-                <th>Interface</th>
-                <th>Nominal (mm)</th>
-                <th>Fit / Tolerance</th>
-                <th>Roughness / Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${renderTolRows(evalRow["Tolerancing Data"])}
-            </tbody>
-          </table>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; margin: 1.5rem 0 0.5rem;">
-          <h3 style="font-size: 1rem;">Justification</h3>
-          ${isEditor() ? `<button class="btn-action" onclick="window.openJustificationModal('${partName}')">Edit Justification</button>` : ""}
-        </div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; font-size: 0.9rem; line-height: 1.6; color: var(--text-main);">
-          ${evalRow.Justification && String(evalRow.Justification).trim() ? String(evalRow.Justification).replace(/\n/g, "<br>") : "<span style='color: var(--text-dim);'>No justification recorded.</span>"}
-        </div>
-      </div>
-
-      <!-- Tab: FEA Stiffness -->
-      <div class="tab-pane" id="tabFEA">
         ${renderFEATable(evalRow, refRow, true)}
+
+        ${String(evalRow.Version) !== String(refRow.Version) ? `
+        <h3 style="font-size: 1rem; margin: 1.5rem 0 0.75rem;">Side Comparison</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+          <div class="inline-tab-card">
+            <h4 style="margin-bottom: 0.35rem; color: var(--text-muted);">Baseline: ${formatVersion(refRow.Version)}</h4>
+            <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Weight: ${refWeight.toFixed(1)} g | Date: ${refRow.Date || "—"}</div>
+            <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${refRow.Description || "No description recorded."}</p>
+            <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem;">Specifications</h5>
+            <div class="card-table-wrapper" style="margin-bottom: 0.75rem;">
+              <table class="styled-table"><tbody>${renderSpecsRows(refRow.Specifications)}</tbody></table>
+            </div>
+            ${renderSideSchematic(refRow)}
+          </div>
+          <div class="inline-tab-card">
+            <h4 style="margin-bottom: 0.35rem; color: var(--accent-red);">Evaluated: ${formatVersion(evalRow.Version)}</h4>
+            <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Weight: ${evalWeight.toFixed(1)} g | Date: ${evalRow.Date || "—"}</div>
+            <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${evalRow.Description || "No description recorded."}</p>
+            <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem;">Specifications</h5>
+            <div class="card-table-wrapper" style="margin-bottom: 0.75rem;">
+              <table class="styled-table"><tbody>${renderSpecsRows(evalRow.Specifications)}</tbody></table>
+            </div>
+            ${renderSideSchematic(evalRow)}
+          </div>
+        </div>
+        ` : `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; margin-top: 1.5rem;">
+          <div class="inline-tab-card">
+            <h4 style="margin-bottom: 0.5rem;">Specifications</h4>
+            <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${evalRow.Description || "—"}</p>
+            <div class="card-table-wrapper">
+              <table class="styled-table"><tbody>${renderSpecsRows(evalRow.Specifications)}</tbody></table>
+            </div>
+          </div>
+          <div class="inline-tab-card">
+            <h4 style="margin-bottom: 0.5rem;">Schematic</h4>
+            ${renderSideSchematic(evalRow)}
+          </div>
+        </div>
+        `}
+
+        ${relatedReqs.length ? `
+        <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">Related Requirements</h3>
+        <div class="card-table-wrapper">
+          <table class="styled-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Category</th>
+                <th>Requirement</th>
+                <th>Verification</th>
+                <th>Validation</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${relatedReqs.map(r => `
+                <tr>
+                  <td><strong style="color: var(--accent-red);">${r.ID || "—"}</strong></td>
+                  <td>${r.Category || "—"}</td>
+                  <td>${r.Requirement || "—"}</td>
+                  <td style="color: var(--text-muted); font-size: 0.82rem;">${r.Verification || "—"}</td>
+                  <td style="color: var(--text-muted); font-size: 0.82rem;">${r.Validation || "—"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        ` : ""}
+      </div>
+
+      <!-- Tab: Justification -->
+      <div class="tab-pane ${activePartTab === "tabJustification" ? "active" : ""}" id="tabJustification">
+        <div class="inline-tab-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="font-size: 1.05rem;">Component Justification</h3>
+            ${isEditor() ? `<button class="btn-primary" id="btnSaveJustInline">Save Justification</button>` : ""}
+          </div>
+          ${isEditor() ? `
+          <div class="form-group">
+            <label for="textareaJustInline">Engineering Justification</label>
+            <textarea id="textareaJustInline" class="form-textarea" style="min-height: 200px;" placeholder="Document mechanical justification, compliance with FSG rules, material choices...">${evalRow.Justification || ""}</textarea>
+          </div>
+          ` : `
+          <div style="font-size: 0.92rem; line-height: 1.6; color: var(--text-main);">
+            ${evalRow.Justification && String(evalRow.Justification).trim() ? String(evalRow.Justification).replace(/\n/g, "<br>") : "<span style='color: var(--text-dim);'>No justification recorded.</span>"}
+          </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Tab: Tolerances -->
+      <div class="tab-pane ${activePartTab === "tabTolerances" ? "active" : ""}" id="tabTolerances">
+        <div class="inline-tab-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+              <h3 style="font-size: 1.05rem;">Manufacturing GD&T</h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted);">Tolerances and fits across interfaces</p>
+            </div>
+            ${isEditor() ? `<button class="btn-action" onclick="window.openTolerancesModal('${partName}')">Edit Tolerances</button>` : ""}
+          </div>
+          <div class="card-table-wrapper">
+            <table class="styled-table">
+              <thead>
+                <tr>
+                  <th>Interface</th>
+                  <th>Nominal (mm)</th>
+                  <th>Fit / Tolerance</th>
+                  <th>Roughness / Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${renderTolRows(evalRow["Tolerancing Data"])}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: New Iteration -->
+      <div class="tab-pane ${activePartTab === "tabNewIter" ? "active" : ""}" id="tabNewIter">
+        <div class="inline-tab-card">
+          <div style="margin-bottom: 1.25rem;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.25rem;">New Iteration</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Create new design iteration for ${partName}</p>
+          </div>
+
+          ${!isEditor() ? `
+          <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+            Editor access required to create iterations. Enter fine-grained PAT in Cloud Settings.
+          </div>
+          ` : `
+          <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+            <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
+              Copy From:
+              <select id="selectNewIterSource" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;">
+                ${iters.map((it, idx) => `<option value="${it.Version}" ${idx === iters.length - 1 ? "selected" : ""}>${formatVersion(it.Version)} (${parseFloat(it["Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
+              </select>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="newIterVer">Version ID</label>
+              <input type="text" id="newIterVer" class="form-input" value="${nextVer}">
+            </div>
+            <div class="form-group">
+              <label for="newIterWeight">Weight (g)</label>
+              <input type="number" step="0.1" id="newIterWeight" class="form-input" value="${parseFloat(latest["Weight (g)"] || 0)}">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="newIterDesc">Description</label>
+            <input type="text" id="newIterDesc" class="form-input" placeholder="Summary of changes" value="${latest.Description || ""}">
+          </div>
+
+          <div class="form-group">
+            <label for="newIterSpecs">Specifications</label>
+            <textarea id="newIterSpecs" class="form-textarea" placeholder="Feature: Value">${latest.Specifications || ""}</textarea>
+          </div>
+
+          ${partLcs.length ? `
+          <div style="margin: 1.5rem 0 0.75rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Capture in nTop (Win+Shift+S) and paste (Ctrl+V) anywhere, or click dropzone below.
+            </p>
+          </div>
+
+          <div class="ocr-dropzone" id="dropzoneNewIterFea" title="Click or Paste (Ctrl+V) FEA Screenshot">
+            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">Paste FEA Screenshot</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">Press Ctrl+V anywhere on this tab, click to choose file, or drag & drop</div>
+          </div>
+          <input type="file" id="fileInpNewIterFea" accept="image/*" style="display: none;">
+
+          <div class="form-row">
+            ${partLcs.map((lc) => {
+              const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
+              const desc = descMap[lc] || "";
+              return `
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label for="newLC_${lc}" style="margin: 0; font-size: 0.8rem;">${lc} ${desc ? `(${desc})` : ""}</label>
+                    <span id="new_badge_${lc}" class="tag" style="display: none; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
+                  </div>
+                  <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="newLC_${lc}" class="form-input" value="${curVal}">
+                </div>
+              `;
+            }).join("")}
+          </div>
+          ` : ""}
+
+          <div class="form-group" style="margin-top: 1rem;">
+            <label>CAD Schematic</label>
+            <div class="ocr-dropzone" id="dropzoneNewIterSchematic" style="padding: 0.85rem;">
+              <span id="labelNewIterSchematic" style="font-size: 0.82rem; color: var(--text-muted);">Click to upload schematic image (optional)</span>
+            </div>
+            <input type="file" id="fileInpNewIterSchematic" accept="image/*" style="display: none;">
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+            <button class="btn-primary" id="btnSaveNewIterInline">Save Iteration</button>
+          </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Tab: Edit -->
+      <div class="tab-pane ${activePartTab === "tabEdit" ? "active" : ""}" id="tabEdit">
+        <div class="inline-tab-card">
+          <div style="margin-bottom: 1.25rem;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.25rem;">Edit Iteration</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Modify recorded parameters for ${partName}</p>
+          </div>
+
+          ${!isEditor() ? `
+          <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+            Editor access required to edit iterations. Enter fine-grained PAT in Cloud Settings.
+          </div>
+          ` : `
+          <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+            <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
+              Select Iteration:
+              <select id="editSelectVer" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;">
+                ${iters.map((it) => `<option value="${it.Version}" ${String(it.Version) === String(evalRow.Version) ? "selected" : ""}>${formatVersion(it.Version)} (${parseFloat(it["Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
+              </select>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Version</label>
+              <input type="text" class="form-input" value="${formatVersion(evalRow.Version)}" disabled>
+            </div>
+            <div class="form-group">
+              <label for="editIterWeight">Weight (g)</label>
+              <input type="number" step="0.1" id="editIterWeight" class="form-input" value="${parseFloat(evalRow["Weight (g)"] || 0)}">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="editIterDesc">Description</label>
+            <input type="text" id="editIterDesc" class="form-input" value="${evalRow.Description || ""}">
+          </div>
+
+          <div class="form-group">
+            <label for="editIterSpecs">Specifications</label>
+            <textarea id="editIterSpecs" class="form-textarea">${evalRow.Specifications || ""}</textarea>
+          </div>
+
+          ${partLcs.length ? `
+          <div style="margin: 1.5rem 0 0.75rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Capture in nTop and paste (Ctrl+V) or click dropzone to auto-update.
+            </p>
+          </div>
+
+          <div class="ocr-dropzone" id="dropzoneEditIterFea" title="Click or Paste (Ctrl+V) FEA Screenshot">
+            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">Paste FEA Screenshot</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">Press Ctrl+V anywhere on this tab, click to choose file, or drag & drop</div>
+          </div>
+          <input type="file" id="fileInpEditIterFea" accept="image/*" style="display: none;">
+
+          <div class="form-row">
+            ${partLcs.map((lc) => {
+              const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
+              const desc = descMap[lc] || "";
+              return `
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label for="editLC_${lc}" style="margin: 0; font-size: 0.8rem;">${lc} ${desc ? `(${desc})` : ""}</label>
+                    <span id="edit_badge_${lc}" class="tag" style="display: none; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
+                  </div>
+                  <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" value="${curVal}">
+                </div>
+              `;
+            }).join("")}
+          </div>
+          ` : ""}
+
+          <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; margin-top: 1.5rem; flex-wrap: wrap;">
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn-action danger" onclick="window.deleteIteration('${partName}', '${evalRow.Version}')">Delete Iteration</button>
+              <button class="btn-action danger" onclick="window.deletePart('${partName}')">Delete Part</button>
+            </div>
+            <button class="btn-primary" id="btnSaveEditIterInline">Save Iteration</button>
+          </div>
+          `}
+        </div>
       </div>
 
       <!-- Tab: Schematic Gallery -->
-      <div class="tab-pane" id="tabImage">
+      <div class="tab-pane ${activePartTab === "tabSchematic" ? "active" : ""}" id="tabSchematic">
         ${renderGallery(evalRow, partName)}
       </div>
     `;
@@ -827,21 +1319,301 @@
     }
 
     // Attach Tab Navigation
-    elContentArea.querySelectorAll(".tab-btn").forEach((btn) => {
+    elContentArea.querySelectorAll(".tabs-header .tab-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        elContentArea.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        elContentArea.querySelectorAll(".tabs-header .tab-btn").forEach((b) => b.classList.remove("active"));
         elContentArea.querySelectorAll(".tab-pane").forEach((p) => p.classList.remove("active"));
         btn.classList.add("active");
         const targetId = btn.getAttribute("data-tab");
+        activePartTab = targetId;
         const targetPane = document.getElementById(targetId);
         if (targetPane) targetPane.classList.add("active");
       });
     });
 
-    // Attach dropzone & paste events for gallery in Editor mode
+    // Attach listeners for inline actions
+    attachInlineFormListeners(partName, evalRow, iters);
     attachGalleryEventListeners(evalRow, partName);
     attachFeaListeners(evalRow, partName);
   }
+
+  function renderSideSchematic(row) {
+    const imgs = parseImagePaths(row["Image Path"]);
+    if (!imgs.length) {
+      return `<div style="color: var(--text-dim); font-size: 0.82rem; padding: 1rem; text-align: center;">No schematic image.</div>`;
+    }
+    const clean = imgs[0].startsWith("data:") ? imgs[0] : `../${imgs[0]}`;
+    return `
+      <div style="cursor: pointer; text-align: center; margin-top: 0.5rem;" onclick="window.openLightbox('${clean}')">
+        <img src="${clean}" alt="Schematic" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--border-color);" onerror="this.src='';">
+      </div>
+    `;
+  }
+
+  function attachInlineFormListeners(partName, evalRow, iters) {
+    // 1. Save Justification
+    const btnSaveJust = document.getElementById("btnSaveJustInline");
+    if (btnSaveJust) {
+      btnSaveJust.onclick = async () => {
+        const txt = document.getElementById("textareaJustInline").value.trim();
+        partsData.forEach((p) => {
+          if (p["Part Name"] === partName) {
+            p.Justification = txt || null;
+          }
+        });
+        try {
+          await window.DTCloud.commitFile("data/parts.json", partsData, `Update justification for ${partName}`);
+          showToast("Justification saved!");
+          renderPartView(partName);
+        } catch (e) {
+          alert("Error saving justification: " + e.message);
+        }
+      };
+    }
+
+    // 2. New Iteration Copy From Selector
+    const selCopy = document.getElementById("selectNewIterSource");
+    if (selCopy) {
+      selCopy.onchange = (e) => {
+        const srcVer = e.target.value;
+        const srcRow = iters.find((p) => String(p.Version) === String(srcVer));
+        if (srcRow) {
+          const wInp = document.getElementById("newIterWeight");
+          const dInp = document.getElementById("newIterDesc");
+          const sInp = document.getElementById("newIterSpecs");
+          if (wInp) wInp.value = parseFloat(srcRow["Weight (g)"] || 0);
+          if (dInp) dInp.value = srcRow.Description || "";
+          if (sInp) sInp.value = srcRow.Specifications || "";
+        }
+      };
+    }
+
+    // 3. New Iteration OCR Dropzone & File Input
+    const dropNewFea = document.getElementById("dropzoneNewIterFea");
+    const fileNewFea = document.getElementById("fileInpNewIterFea");
+    if (dropNewFea && fileNewFea) {
+      dropNewFea.onclick = () => fileNewFea.click();
+      fileNewFea.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handleFeaScreenshotPasted(e.target.files[0], partName, "new");
+        }
+      };
+      dropNewFea.ondragover = (e) => {
+        e.preventDefault();
+        dropNewFea.classList.add("dragover");
+      };
+      dropNewFea.ondragleave = () => dropNewFea.classList.remove("dragover");
+      dropNewFea.ondrop = (e) => {
+        e.preventDefault();
+        dropNewFea.classList.remove("dragover");
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFeaScreenshotPasted(e.dataTransfer.files[0], partName, "new");
+        }
+      };
+    }
+
+    // 4. Edit Iteration OCR Dropzone & File Input
+    const dropEditFea = document.getElementById("dropzoneEditIterFea");
+    const fileEditFea = document.getElementById("fileInpEditIterFea");
+    if (dropEditFea && fileEditFea) {
+      dropEditFea.onclick = () => fileEditFea.click();
+      fileEditFea.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handleFeaScreenshotPasted(e.target.files[0], partName, "edit");
+        }
+      };
+      dropEditFea.ondragover = (e) => {
+        e.preventDefault();
+        dropEditFea.classList.add("dragover");
+      };
+      dropEditFea.ondragleave = () => dropEditFea.classList.remove("dragover");
+      dropEditFea.ondrop = (e) => {
+        e.preventDefault();
+        dropEditFea.classList.remove("dragover");
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFeaScreenshotPasted(e.dataTransfer.files[0], partName, "edit");
+        }
+      };
+    }
+
+    // 5. New Iteration Schematic Upload
+    const dropNewSch = document.getElementById("dropzoneNewIterSchematic");
+    const fileNewSch = document.getElementById("fileInpNewIterSchematic");
+    const labelNewSch = document.getElementById("labelNewIterSchematic");
+    if (dropNewSch && fileNewSch) {
+      dropNewSch.onclick = () => fileNewSch.click();
+      fileNewSch.onchange = async (e) => {
+        if (e.target.files && e.target.files[0]) {
+          const downscaled = await downscaleImage(e.target.files[0]);
+          newIterSchematic = downscaled;
+          if (labelNewSch) labelNewSch.textContent = `Schematic loaded (${e.target.files[0].name})`;
+          dropNewSch.style.borderColor = "var(--delta-green)";
+        }
+      };
+    }
+
+    // 6. Save New Iteration Button
+    const btnSaveNew = document.getElementById("btnSaveNewIterInline");
+    if (btnSaveNew) {
+      btnSaveNew.onclick = async () => {
+        const v = document.getElementById("newIterVer").value.trim();
+        const w = parseFloat(document.getElementById("newIterWeight").value) || 0;
+        const desc = document.getElementById("newIterDesc").value.trim();
+        const specs = document.getElementById("newIterSpecs").value.trim();
+
+        if (!v) {
+          alert("Version string is required.");
+          return;
+        }
+
+        if (iters.some((it) => String(it.Version) === v)) {
+          alert("Version " + v + " already exists for this part.");
+          return;
+        }
+
+        const isHB = partName === "HB_01";
+        const isUP = partName === "UP_01";
+        const partLcs = isUP
+          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
+          : isHB
+          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
+          : [];
+
+        const stiffObj = {};
+        if (partLcs.length) {
+          partLcs.forEach((lc) => {
+            const inp = document.getElementById("newLC_" + lc);
+            stiffObj[lc] = inp ? parseFloat(inp.value) || 0 : 0;
+          });
+        }
+
+        const latest = iters[iters.length - 1];
+        const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+        let finalLcImages = {};
+        try {
+          if (latest["LC Images"]) finalLcImages = JSON.parse(latest["LC Images"]);
+        } catch (e) {}
+        Object.assign(finalLcImages, newIterLcImages);
+
+        const newRow = {
+          Subassembly: latest.Subassembly || "Drivetrain",
+          "Part Name": partName,
+          Version: v,
+          Date: now,
+          "Weight (g)": w,
+          Description: desc,
+          Specifications: specs,
+          "Image Path": newIterSchematic || latest["Image Path"] || null,
+          "Stiffness Data": partLcs.length ? JSON.stringify(stiffObj) : latest["Stiffness Data"],
+          "LC Images": Object.keys(finalLcImages).length ? JSON.stringify(finalLcImages) : null,
+          "Tolerancing Data": latest["Tolerancing Data"] || null,
+          Justification: latest["Justification"] || null
+        };
+
+        partsData.push(newRow);
+
+        try {
+          await window.DTCloud.commitFile("data/parts.json", partsData, `Add ${partName} v${v}`);
+          selectedEvalVersion = v;
+          newIterLcImages = {};
+          newIterSchematic = null;
+          activePartTab = "tabOverview";
+          buildSidebar();
+          renderPartView(partName);
+          showToast(`Iteration v${v} saved!`);
+        } catch (e) {
+          alert("Error saving iteration: " + e.message);
+        }
+      };
+    }
+
+    // 7. Edit Iteration Selector & Save Button
+    const editSelVer = document.getElementById("editSelectVer");
+    if (editSelVer) {
+      editSelVer.onchange = (e) => {
+        selectedEvalVersion = e.target.value;
+        renderPartView(partName);
+      };
+    }
+
+    const btnSaveEdit = document.getElementById("btnSaveEditIterInline");
+    if (btnSaveEdit) {
+      btnSaveEdit.onclick = async () => {
+        const targetVer = editSelVer ? editSelVer.value : evalRow.Version;
+        const row = partsData.find((p) => p["Part Name"] === partName && String(p.Version) === String(targetVer));
+        if (!row) return;
+
+        const w = parseFloat(document.getElementById("editIterWeight").value) || 0;
+        const desc = document.getElementById("editIterDesc").value.trim();
+        const specs = document.getElementById("editIterSpecs").value.trim();
+
+        row["Weight (g)"] = w;
+        row.Description = desc;
+        row.Specifications = specs;
+
+        const isHB = partName === "HB_01";
+        const isUP = partName === "UP_01";
+        const partLcs = isUP
+          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
+          : isHB
+          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
+          : [];
+
+        if (partLcs.length) {
+          const stiffObj = {};
+          partLcs.forEach((lc) => {
+            const inp = document.getElementById("editLC_" + lc);
+            stiffObj[lc] = inp ? parseFloat(inp.value) || 0 : 0;
+          });
+          row["Stiffness Data"] = JSON.stringify(stiffObj);
+        }
+
+        if (Object.keys(editIterLcImages).length) {
+          let curLc = {};
+          try {
+            if (row["LC Images"]) curLc = JSON.parse(row["LC Images"]);
+          } catch (e) {}
+          Object.assign(curLc, editIterLcImages);
+          row["LC Images"] = JSON.stringify(curLc);
+        }
+
+        try {
+          await window.DTCloud.commitFile("data/parts.json", partsData, `Update ${partName} v${targetVer}`);
+          editIterLcImages = {};
+          activePartTab = "tabOverview";
+          renderPartView(partName);
+          showToast(`Iteration ${formatVersion(targetVer)} updated!`);
+        } catch (e) {
+          alert("Error saving iteration: " + e.message);
+        }
+      };
+    }
+  }
+
+  // Global paste listener for FEA Screenshot OCR
+  window.addEventListener("paste", async (e) => {
+    if (!currentView || currentView === "assembly" || currentView === "requirements" || currentView === "trash") {
+      return;
+    }
+    if (!isEditor()) return;
+    if (activePartTab !== "tabNewIter" && activePartTab !== "tabEdit") {
+      return;
+    }
+
+    if (e.clipboardData && e.clipboardData.items) {
+      for (const item of e.clipboardData.items) {
+        if (item.type.indexOf("image") !== -1) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            handleFeaScreenshotPasted(file, currentView, activePartTab === "tabNewIter" ? "new" : "edit");
+          }
+          break;
+        }
+      }
+    }
+  });
 
   // Specifications parser
   function renderSpecsRows(specStr) {

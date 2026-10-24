@@ -1,22 +1,22 @@
 :root {
-  --bg-app: #0e1117;
-  --bg-sidebar: #161922;
-  --bg-card: #1e222d;
-  --bg-card-hover: #252a38;
-  --border-color: #2b3040;
-  --border-light: #383e52;
-  --text-main: #f0f2f6;
-  --text-muted: #9aa0b0;
-  --text-dim: #6b7280;
-  --accent-red: #ff4b4b;
-  --accent-red-hover: #ff3333;
-  --delta-green: #33cc33;
-  --delta-red: #ff4b4b;
-  --input-bg: #262b3a;
-  --sidebar-w: 280px;
+  --bg-app: #141416;
+  --bg-sidebar: #101012;
+  --bg-card: #1c1c1f;
+  --bg-card-hover: #232327;
+  --border-color: #27272a;
+  --border-light: #323237;
+  --text-main: #fafafa;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
+  --accent-red: #e11d48;
+  --accent-red-hover: #f43f5e;
+  --delta-green: #22c55e;
+  --delta-red: #ef4444;
+  --input-bg: #18181b;
+  --sidebar-w: 270px;
   --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
 }
 
 * {
@@ -116,7 +116,7 @@ body {
 }
 
 .nav-item.active {
-  background-color: rgba(255, 75, 75, 0.15);
+  background-color: rgba(225, 29, 72, 0.12);
   color: var(--text-main);
   font-weight: 600;
   border-left: 3px solid var(--accent-red);
@@ -688,8 +688,70 @@ body {
 
 .gallery-dropzone:hover, .gallery-dropzone.dragover {
   border-color: var(--accent-red);
-  background: rgba(255, 75, 75, 0.05);
+  background: rgba(225, 29, 72, 0.05);
   color: var(--text-main);
+}
+
+/* OCR FEA Dropzone & Indicator */
+.ocr-dropzone {
+  border: 1.5px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  text-align: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.015);
+  transition: all 0.2s ease;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.ocr-dropzone:hover, .ocr-dropzone.dragover {
+  border-color: var(--accent-red);
+  background: rgba(225, 29, 72, 0.05);
+  color: var(--text-main);
+}
+
+.ocr-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-red);
+  color: var(--text-main);
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  z-index: 9999;
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: slideInToast 0.25s ease-out;
+}
+
+@keyframes slideInToast {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.inline-tab-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 /* Lightbox Modal */
