@@ -745,21 +745,31 @@
           <tbody>
     `;
 
+    const subOrder = ["UP", "HB", "GB", "TD", "Other"];
+    const getSubPriority = (sub) => {
+      const idx = subOrder.indexOf(sub);
+      return idx === -1 ? 999 : idx;
+    };
+
     Array.from(partLatestMap.values())
-      .sort((a, b) => (a.Subassembly || "").localeCompare(b.Subassembly || "") || a["Part Name"].localeCompare(b["Part Name"]))
+      .sort((a, b) => {
+        const pA = getSubPriority(a.Subassembly || "Other");
+        const pB = getSubPriority(b.Subassembly || "Other");
+        if (pA !== pB) return pA - pB;
+        return (a["Part Name"] || "").localeCompare(b["Part Name"] || "");
+      })
       .forEach((p) => {
         const w = parseFloat(p["Weight (g)"]) || 0;
         html += `
           <tr style="cursor: pointer;" onclick="window.navigateToPart('${p["Part Name"]}')">
-            <td><strong>${p.Subassembly || "—"}</strong></td>
-            <td><span style="color: var(--accent-red); font-weight: 600;">${p["Part Name"]}</span></td>
+            <td><strong>${p.Subassembly || "-"}</strong></td>
+            <td><span style="color: #ffffff; font-weight: 600;">${p["Part Name"]}</span></td>
             <td>${formatVersion(p.Version)}</td>
             <td class="mono"><strong>${w.toFixed(1)} g</strong></td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">${(p.Description || "").slice(0, 60)}...</td>
           </tr>
         `;
       });
-
     html += `
           </tbody>
         </table>
