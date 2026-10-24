@@ -14,8 +14,9 @@
   let trashData = [];
 
   let currentView = "assembly"; // 'assembly', 'requirements', 'trash', or part name (e.g. 'UP_01')
+  let currentPartName = null;
   let selectedEvalVersion = null;
-  let selectedRefVersion = "FST15";
+  let selectedRefVersion = null;
   let activeGalleryIndex = 0;
   let reqActiveTab = "list"; // 'list' or 'diagrams'
   let activeFeaLc = "LC1";
@@ -593,9 +594,13 @@
     // Attach click events
     elSidebarNav.querySelectorAll(".nav-item[data-view]").forEach((item) => {
       item.addEventListener("click", () => {
-        currentView = item.getAttribute("data-view");
-        selectedEvalVersion = null;
-        selectedRefVersion = "FST15";
+        const nextView = item.getAttribute("data-view");
+        if (nextView !== currentView) {
+          currentPartName = null;
+          selectedEvalVersion = null;
+          selectedRefVersion = null;
+        }
+        currentView = nextView;
         activeGalleryIndex = 0;
         buildSidebar();
         renderCurrentView();
@@ -653,10 +658,13 @@
   // Render View Router
   function renderCurrentView() {
     if (currentView === "assembly") {
+      currentPartName = null;
       renderAssemblyView();
     } else if (currentView === "requirements") {
+      currentPartName = null;
       renderRequirementsView();
     } else if (currentView === "trash") {
+      currentPartName = null;
       renderTrashView();
     } else {
       renderPartView(currentView);
@@ -977,6 +985,18 @@
     }
   };
 
+  function getDefaultBaseline(partName, iters) {
+    if (partName === "UP_01") {
+      const up01Body = iters.find((p) => String(p.Version).toLowerCase().includes("1 body"));
+      if (up01Body) return up01Body.Version;
+    }
+    const fst15Exact = iters.find((p) => String(p.Version) === "FST15");
+    if (fst15Exact) return fst15Exact.Version;
+    const fst15Any = iters.find((p) => String(p.Version).toUpperCase().startsWith("FST15"));
+    if (fst15Any) return fst15Any.Version;
+    return iters[0] ? iters[0].Version : "FST15";
+  }
+
   // 4. Component / Part Detail View
   function renderPartView(partName) {
     const iters = partsData.filter((p) => p["Part Name"] === partName);
@@ -985,8 +1005,17 @@
       return;
     }
 
-    if (!selectedEvalVersion) {
+    if (currentPartName !== partName) {
+      currentPartName = partName;
       selectedEvalVersion = iters[iters.length - 1].Version;
+      selectedRefVersion = getDefaultBaseline(partName, iters);
+    } else {
+      if (!selectedEvalVersion || !iters.some((p) => String(p.Version) === String(selectedEvalVersion))) {
+        selectedEvalVersion = iters[iters.length - 1].Version;
+      }
+      if (!selectedRefVersion || !iters.some((p) => String(p.Version) === String(selectedRefVersion))) {
+        selectedRefVersion = getDefaultBaseline(partName, iters);
+      }
     }
 
     const evalRow = iters.find((p) => String(p.Version) === String(selectedEvalVersion)) || iters[iters.length - 1];
@@ -3025,9 +3054,12 @@
 
   // Global Navigation Shortcut
   window.navigateToPart = function (partName) {
+    if (partName !== currentView) {
+      currentPartName = null;
+      selectedEvalVersion = null;
+      selectedRefVersion = null;
+    }
     currentView = partName;
-    selectedEvalVersion = null;
-    selectedRefVersion = "FST15";
     activeGalleryIndex = 0;
     buildSidebar();
     renderCurrentView();
