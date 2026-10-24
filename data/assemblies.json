@@ -1,0 +1,30 @@
+[
+  {
+    "Assembly Version": "1.0",
+    "Date": "2026-10-12 22:02:36",
+    "Total Weight (g)": 1690.22,
+    "Description": "The first iteration for the new motors where the bearings sit right on top of the seal",
+    "Part Configuration": "TD: v1.2\nHB_01: v1\nHB_07: v1.0\nUP_01: v1.1\nUP_02: v1\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
+  },
+  {
+    "Assembly Version": "2.0 (Without Support)",
+    "Date": "2026-10-13 20:49:23",
+    "Total Weight (g)": 648.28,
+    "Description": "This assembly has the objective of having a comparative analysis with the FST15 design with the same features, focusing in the new v2.0 transmission",
+    "Part Configuration": "TD: v2.0\nUP_01: v2.0 (without supports)\nUP_02: v2.0 (with all features)\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
+  },
+  {
+    "Assembly Version": "FST15 (Without Support)",
+    "Date": "2026-10-13 20:44:41",
+    "Total Weight (g)": 856.61,
+    "Description": "This assembly has the objective of having a comparative baseline without the supports",
+    "Part Configuration": "UP_01: vFST15 (without supports)\nUP_02: vFST15 (with all features)\nUP_03: vFST15\nInner Bearing: v61815\nOuter Bearing: v61816\nSeal: v95X110X9 HMSA10 V"
+  },
+  {
+    "Assembly Version": "FST15",
+    "Date": "2026-10-18 10:53:30",
+    "Total Weight (g)": 2220.16,
+    "Description": "FST15 Baseline",
+    "Part Configuration": "HB_01: vFST15\nUP_01: vFST15\nUP_02: vFST15\nUP_03: vFST15\nInner Bearing: v61815\nOuter Bearing: v61815\nSeal: v85X100X9 HMSA10 V"
+  }
+]

@@ -60,7 +60,7 @@ def grab_image_from_clipboard():
         time.sleep(0.1)
     return None
 
-def extract_ntop_fea_from_image(pil_img):
+def extract_ntop_fea_from_image(pil_img, target_part=None):
     if pil_img is None or os.name != "nt":
         return None, None
     tmp_path = None
@@ -104,24 +104,26 @@ def extract_ntop_fea_from_image(pil_img):
         nospace = first_lines.replace(" ", "")
 
         detected_lc = None
+        # Load Case detection: support UP_01 and HB_01 matchers
         if "pure" in first_lines and "brak" in first_lines:
             detected_lc = "LC1"
         elif "pure" in first_lines and "acc" in first_lines:
             detected_lc = "LC2"
         elif "pure" in first_lines and ("corn" in first_lines or "com" in first_lines):
             detected_lc = "LC3"
-        elif "brak" in first_lines and ("cornering2" in nospace or "comering2" in nospace):
+        elif "b+c2" in nospace or "b+c_2" in nospace or ("brak" in first_lines and ("cornering2" in nospace or "comering2" in nospace)):
             detected_lc = "LC5"
-        elif "brak" in first_lines and ("corn" in first_lines or "com" in first_lines):
+        elif "b+c1" in nospace or "b+c_1" in nospace or "b+c" in nospace or ("brak" in first_lines and ("corn" in first_lines or "com" in first_lines)):
             detected_lc = "LC4"
-        elif "acc" in first_lines and ("cornering2" in nospace or "comering2" in nospace):
+        elif "a+c2" in nospace or "a+c_2" in nospace or ("acc" in first_lines and ("cornering2" in nospace or "comering2" in nospace)):
             detected_lc = "LC7"
-        elif "acc" in first_lines and ("corn" in first_lines or "com" in first_lines):
+        elif "a+c1" in nospace or "a+c_1" in nospace or "a+c" in nospace or ("acc" in first_lines and ("corn" in first_lines or "com" in first_lines)):
             detected_lc = "LC6"
-        elif "-1kn" in nospace or "-ikn" in nospace or "result_2" in nospace or "result-2" in nospace:
-            detected_lc = "LC9"
-        elif "1kn" in nospace or "ikn" in nospace:
-            detected_lc = "LC8"
+        elif target_part != "HB_01":
+            if "-1kn" in nospace or "-ikn" in nospace or "result_2" in nospace or "result-2" in nospace:
+                detected_lc = "LC9"
+            elif "1kn" in nospace or "ikn" in nospace:
+                detected_lc = "LC8"
 
         nums = []
         for m in re.finditer(r"([1-9])[.\-]?(\d{5})\s*(?:e\s*[\-+]|[\+&])\s*0([0-4])", text, re.I):
@@ -132,7 +134,9 @@ def extract_ntop_fea_from_image(pil_img):
         detected_disp = None
         if nums:
             raw_max = nums[0]
-            detected_disp = math.floor(raw_max * 10000 + 1e-9) / 10000
+            part_decimals = 5 if target_part == "HB_01" else 4
+            factor = 10 ** part_decimals
+            detected_disp = math.floor(raw_max * factor + 1e-9) / factor
 
         return detected_lc, detected_disp
     except Exception:
@@ -375,31 +379,74 @@ def save_formatted_excel(df, filename, table_name="DataTable"):
         return False
 
 # ==================== FEA STIFFNESS & DISPLACEMENTS ====================
-LC_KEYS = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-
-LC_INFO = {
-    "LC1": {"desc": "Pure Braking", "ref_fst15": 0.2955, "default_fst16": 0.3211},
-    "LC2": {"desc": "Pure Acceleration", "ref_fst15": 0.4246, "default_fst16": 0.4234},
-    "LC3": {"desc": "Pure Cornering", "ref_fst15": 0.3381, "default_fst16": 0.5343},
-    "LC4": {"desc": "Braking + Cornering 1", "ref_fst15": 0.4214, "default_fst16": 0.4075},
-    "LC5": {"desc": "Braking + Cornering 2", "ref_fst15": 0.4229, "default_fst16": 0.3582},
-    "LC6": {"desc": "Acceleration + Cornering 1", "ref_fst15": 0.3262, "default_fst16": 0.4746},
-    "LC7": {"desc": "Acceleration + Cornering 2", "ref_fst15": 0.3574, "default_fst16": 0.5312},
-    "LC8": {"desc": "1kN Fy", "ref_fst15": 0.0, "default_fst16": 0.0},
-    "LC9": {"desc": "-1kN Fy", "ref_fst15": 0.0, "default_fst16": 0.0},
+FEA_PARTS_CONFIG = {
+    "UP_01": {
+        "DECIMALS": 4,
+        "LC_KEYS": ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"],
+        "LC_INFO": {
+            "LC1": {"desc": "Pure Braking", "ref_fst15": 0.2955, "default_fst16": 0.3211},
+            "LC2": {"desc": "Pure Acceleration", "ref_fst15": 0.4246, "default_fst16": 0.4234},
+            "LC3": {"desc": "Pure Cornering", "ref_fst15": 0.3381, "default_fst16": 0.5343},
+            "LC4": {"desc": "Braking + Cornering 1", "ref_fst15": 0.4214, "default_fst16": 0.4075},
+            "LC5": {"desc": "Braking + Cornering 2", "ref_fst15": 0.4229, "default_fst16": 0.3582},
+            "LC6": {"desc": "Acceleration + Cornering 1", "ref_fst15": 0.3262, "default_fst16": 0.4746},
+            "LC7": {"desc": "Acceleration + Cornering 2", "ref_fst15": 0.3574, "default_fst16": 0.5312},
+            "LC8": {"desc": "1kN Fy", "ref_fst15": 0.0, "default_fst16": 0.0},
+            "LC9": {"desc": "-1kN Fy", "ref_fst15": 0.0, "default_fst16": 0.0},
+        },
+        "DEFAULT_FST15": {
+            "LC1": 0.2955, "LC2": 0.4246, "LC3": 0.3381, "LC4": 0.4214,
+            "LC5": 0.4229, "LC6": 0.3262, "LC7": 0.3574, "LC8": 0.0, "LC9": 0.0
+        },
+        "DEFAULT_FST16": {
+            "LC1": 0.3211, "LC2": 0.4234, "LC3": 0.5343, "LC4": 0.4075,
+            "LC5": 0.3582, "LC6": 0.4746, "LC7": 0.5312, "LC8": 0.0, "LC9": 0.0
+        }
+    },
+    "HB_01": {
+        "DECIMALS": 5,
+        "LC_KEYS": ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"],
+        "LC_INFO": {
+            "LC1": {"desc": "Pure Braking", "ref_fst15": 0.0, "default_fst16": None},
+            "LC2": {"desc": "Pure Acceleration", "ref_fst15": 0.0, "default_fst16": None},
+            "LC3": {"desc": "Pure Cornering", "ref_fst15": 0.0, "default_fst16": None},
+            "LC4": {"desc": "Braking + Cornering 1", "ref_fst15": 0.0, "default_fst16": None},
+            "LC5": {"desc": "Braking + Cornering 2", "ref_fst15": 0.0, "default_fst16": None},
+            "LC6": {"desc": "Acceleration + Cornering 1", "ref_fst15": 0.0, "default_fst16": None},
+            "LC7": {"desc": "Acceleration + Cornering 2", "ref_fst15": 0.0, "default_fst16": None},
+        },
+        "DEFAULT_FST15": {
+            "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0,
+            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0
+        },
+        "DEFAULT_FST16": {
+            "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0,
+            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0
+        }
+    }
 }
 
-DEFAULT_FST15_DISPLACEMENTS = {k: LC_INFO[k]["ref_fst15"] for k in LC_KEYS}
-DEFAULT_FST16_DISPLACEMENTS = {k: LC_INFO[k]["default_fst16"] for k in LC_KEYS}
+def get_part_fea_config(part_name):
+    clean = str(part_name).strip()
+    return FEA_PARTS_CONFIG.get(clean, {"DECIMALS": 4, "LC_KEYS": [], "LC_INFO": {}, "DEFAULT_FST15": {}, "DEFAULT_FST16": {}})
 
-def parse_stiffness_data(val):
+# Backwards compatibility globals
+LC_KEYS = FEA_PARTS_CONFIG["UP_01"]["LC_KEYS"]
+LC_INFO = FEA_PARTS_CONFIG["UP_01"]["LC_INFO"]
+DEFAULT_FST15_DISPLACEMENTS = FEA_PARTS_CONFIG["UP_01"]["DEFAULT_FST15"]
+DEFAULT_FST16_DISPLACEMENTS = FEA_PARTS_CONFIG["UP_01"]["DEFAULT_FST16"]
+
+def parse_stiffness_data(val, lc_keys=None):
     if pd.isna(val) or str(val).strip() == "" or str(val).strip() == "nan":
         return {}
     val_str = str(val).strip().replace(": NaN", ": 0.0").replace(": nan", ": 0.0")
     try:
         raw = json.loads(val_str)
+        if not isinstance(raw, dict):
+            return {}
         res = {}
-        for lc in LC_KEYS:
+        target_keys = lc_keys if lc_keys is not None else list(raw.keys())
+        for lc in target_keys:
             if lc in raw:
                 item = raw[lc]
                 if isinstance(item, dict):
@@ -412,35 +459,54 @@ def parse_stiffness_data(val):
         pass
     return {}
 
-def format_stiffness_data(disp_dict):
+def format_stiffness_data(disp_dict, lc_keys=None, decimals=4):
     cleaned = {}
-    for lc in LC_KEYS:
+    target_keys = lc_keys if lc_keys is not None else list(disp_dict.keys())
+    for lc in target_keys:
         if lc in disp_dict and disp_dict[lc] is not None:
             try:
                 if isinstance(disp_dict[lc], dict):
                     num = float(disp_dict[lc].get("disp", 0.0) or 0.0)
                 else:
                     num = float(disp_dict[lc])
-                cleaned[lc] = 0.0 if math.isnan(num) else round(num, 4)
+                cleaned[lc] = 0.0 if math.isnan(num) else round(num, decimals)
             except (ValueError, TypeError):
                 cleaned[lc] = 0.0
     return json.dumps(cleaned)
 
-def build_comparison_dataframe(curr_stiff, ref_stiff, ref_label="FST15", curr_label=None):
+def build_comparison_dataframe(curr_stiff, ref_stiff, ref_label="FST15", curr_label=None, lc_info=None, lc_keys=None):
     rows = []
     curr_col = f"Displacement ({curr_label}) (mm)" if curr_label else "Displacement (mm)"
     ref_col = f"Ref. ({ref_label}) (mm)"
-    for lc in LC_KEYS:
-        desc = LC_INFO[lc]["desc"]
+    target_keys = lc_keys if lc_keys is not None else LC_KEYS
+    target_info = lc_info if lc_info is not None else LC_INFO
+    for lc in target_keys:
+        desc = target_info.get(lc, {}).get("desc", lc)
         
         c_item = curr_stiff.get(lc, 0.0)
-        c_disp = c_item.get("disp", 0.0) if isinstance(c_item, dict) else float(c_item)
-        
+        if c_item is None:
+            c_disp = 0.0
+        elif isinstance(c_item, dict):
+            c_disp = float(c_item.get("disp", 0.0) or 0.0)
+        else:
+            try:
+                c_disp = float(c_item)
+            except (ValueError, TypeError):
+                c_disp = 0.0
+
         r_item = ref_stiff.get(lc, 0.0)
-        r_disp = r_item.get("disp", 0.0) if isinstance(r_item, dict) else float(r_item)
+        if r_item is None:
+            r_disp = 0.0
+        elif isinstance(r_item, dict):
+            r_disp = float(r_item.get("disp", 0.0) or 0.0)
+        else:
+            try:
+                r_disp = float(r_item)
+            except (ValueError, TypeError):
+                r_disp = 0.0
         
         diff = c_disp - r_disp
-        if abs(diff) < 1e-5:
+        if abs(diff) < 1e-7:
             diff = 0.0
             pct = 0.0
         else:
@@ -456,13 +522,13 @@ def build_comparison_dataframe(curr_stiff, ref_stiff, ref_label="FST15", curr_la
         })
     return pd.DataFrame(rows)
 
-def style_comparison_dataframe(df_comp):
+def style_comparison_dataframe(df_comp, decimals=4):
     def highlight_delta(val):
         try:
             v = float(val)
-            if v < -0.00001:
+            if v < -0.000001:
                 return 'color: #33cc33; font-weight: 600;'
-            elif v > 0.00001:
+            elif v > 0.000001:
                 return 'color: #ff4b4b; font-weight: 600;'
         except Exception:
             pass
@@ -474,11 +540,11 @@ def style_comparison_dataframe(df_comp):
     format_dict = {}
     for c in df_comp.columns:
         if c == delta_col:
-            format_dict[c] = "{:+.4f}"
+            format_dict[c] = f"{{:+.{decimals}f}}"
         elif c == pct_col:
             format_dict[c] = "{:+.1f}%"
         elif "(mm)" in c:
-            format_dict[c] = "{:.4f}"
+            format_dict[c] = f"{{:.{decimals}f}}"
 
     styled = df_comp.style.map(
         highlight_delta,
@@ -1681,33 +1747,37 @@ elif st.session_state.current_page == "Part Management":
                             df_all_mass = build_all_iterations_mass_dataframe(part_data, ref_row['Weight (g)'], ref_label)
                             st.dataframe(style_mass_dataframe(df_all_mass), use_container_width=True, hide_index=True)
 
-                    # Structural FEA Comparisons (for UP_01 and brackets)
-                    if selected_part == "UP_01":
+                    # Structural FEA Comparisons (modular for UP_01, HB_01 and brackets)
+                    part_fea_cfg = get_part_fea_config(selected_part)
+                    part_lcs = part_fea_cfg.get("LC_KEYS", [])
+                    if part_lcs:
                         st.markdown("#### FEA Displacements")
-                        ref_stiff = parse_stiffness_data(ref_row.get("Stiffness Data", ""))
+                        part_info = part_fea_cfg.get("LC_INFO", {})
+                        ref_stiff = parse_stiffness_data(ref_row.get("Stiffness Data", ""), lc_keys=part_lcs)
                         if not ref_stiff and str(ref_v) == "FST15":
-                            ref_stiff = DEFAULT_FST15_DISPLACEMENTS
+                            ref_stiff = part_fea_cfg.get("DEFAULT_FST15", {})
 
-                        eval_stiff = parse_stiffness_data(eval_row.get("Stiffness Data", ""))
+                        eval_stiff = parse_stiffness_data(eval_row.get("Stiffness Data", ""), lc_keys=part_lcs)
                         if not eval_stiff:
                             if str(eval_v) == "FST15":
-                                eval_stiff = DEFAULT_FST15_DISPLACEMENTS
+                                eval_stiff = part_fea_cfg.get("DEFAULT_FST15", {})
                             else:
-                                eval_stiff = DEFAULT_FST16_DISPLACEMENTS
+                                eval_stiff = part_fea_cfg.get("DEFAULT_FST16", {})
 
-                        df_view = build_comparison_dataframe(eval_stiff, ref_stiff, ref_label=ref_label, curr_label=eval_label)
-                        st.dataframe(style_comparison_dataframe(df_view), use_container_width=True, hide_index=True)
+                        df_view = build_comparison_dataframe(eval_stiff, ref_stiff, ref_label=ref_label, curr_label=eval_label, lc_info=part_info, lc_keys=part_lcs)
+                        st.dataframe(style_comparison_dataframe(df_view, decimals=part_fea_cfg.get("DECIMALS", 4)), use_container_width=True, hide_index=True)
 
                         ref_lc_dict = parse_lc_images(ref_row.get("LC Images", ""))
                         eval_lc_dict = parse_lc_images(eval_row.get("LC Images", ""))
                         if eval_lc_dict or ref_lc_dict:
                             with st.expander("FEA Screenshots", expanded=False):
-                                avail_lcs = [lc for lc in LC_KEYS if lc in eval_lc_dict or lc in ref_lc_dict]
+                                avail_lcs = [lc for lc in part_lcs if lc in eval_lc_dict or lc in ref_lc_dict]
                                 if avail_lcs:
                                     view_tabs = st.tabs([f"{lc}" for lc in avail_lcs])
                                     for idx_lc, lc in enumerate(avail_lcs):
                                         with view_tabs[idx_lc]:
-                                            st.write(f"**{lc} - {LC_INFO[lc]['desc']}**")
+                                            desc_label = part_info.get(lc, {}).get("desc", lc)
+                                            st.write(f"**{lc} - {desc_label}**")
                                             img_ref_f = resolve_image_path(ref_lc_dict.get(lc))
                                             img_eval_f = resolve_image_path(eval_lc_dict.get(lc))
                                             if str(ref_v) != str(eval_v) and img_ref_f and img_eval_f:
@@ -1753,6 +1823,8 @@ elif st.session_state.current_page == "Part Management":
                                     st.image(img_bracket, caption=f"{selected_part} ({eval_label})", use_container_width=True)
 
                     st.divider()
+                elif not is_oem:
+                    st.info("Single iteration recorded.")
 
                 # Synced Side-by-Side Comparison when comparing two distinct iterations
                 if not is_oem and len(part_data) > 1 and str(ref_v) != str(eval_v):
@@ -1778,6 +1850,8 @@ elif st.session_state.current_page == "Part Management":
                                 st.caption("No schematic image.")
                 else:
                     single_row = eval_row if (not is_oem and len(part_data) > 1) else latest_iter
+                    if not is_oem and len(part_data) > 1 and str(ref_v) == str(eval_v):
+                        st.caption(f"Showing {eval_label}. Select distinct iterations above to compare.")
                     col_left, col_right = st.columns([1.5, 1.2])
                     with col_left:
                         st.markdown("#### Specifications")
@@ -1983,18 +2057,21 @@ elif st.session_state.current_page == "Part Management":
                         current_image_path=source_iter.get('Image Path')
                     )
 
-                # FEA Displacements and Screenshots for UP_01 and brackets
+                # FEA Displacements and Screenshots for UP_01, HB_01 and brackets
                 user_stiff_vals = {}
                 user_lc_images = {}
+                part_fea_cfg = get_part_fea_config(selected_part)
+                part_lcs = part_fea_cfg.get("LC_KEYS", [])
+                part_info = part_fea_cfg.get("LC_INFO", {})
 
-                if selected_part == "UP_01":
+                if part_lcs:
                     st.divider()
                     st.subheader("FEA Displacements")
 
                     ocr_vals_key = f"ocr_vals_new_{selected_part}_{source_idx}"
                     ocr_rev_key = f"ocr_rev_new_{selected_part}_{source_idx}"
                     if ocr_vals_key not in st.session_state:
-                        st.session_state[ocr_vals_key] = {lc: None for lc in LC_KEYS}
+                        st.session_state[ocr_vals_key] = {lc: None for lc in part_lcs}
                     if ocr_rev_key not in st.session_state:
                         st.session_state[ocr_rev_key] = 0
 
@@ -2002,29 +2079,32 @@ elif st.session_state.current_page == "Part Management":
                     if editor_widget_key in st.session_state and isinstance(st.session_state[editor_widget_key], dict):
                         for r_idx_str, r_changes in st.session_state[editor_widget_key].get("edited_rows", {}).items():
                             r_idx = int(r_idx_str)
-                            if 0 <= r_idx < len(LC_KEYS) and "Displacement (mm)" in r_changes:
-                                st.session_state[ocr_vals_key][LC_KEYS[r_idx]] = r_changes["Displacement (mm)"]
+                            if 0 <= r_idx < len(part_lcs) and "Displacement (mm)" in r_changes:
+                                st.session_state[ocr_vals_key][part_lcs[r_idx]] = r_changes["Displacement (mm)"]
 
+                    part_decimals = part_fea_cfg.get("DECIMALS", 4)
                     if st.button("Paste FEA Print", key=f"btn_ocr_new_{selected_part}_{source_idx}", use_container_width=True):
                         pasted_fea = grab_image_from_clipboard()
                         if pasted_fea is not None:
-                            det_lc, det_disp = extract_ntop_fea_from_image(pasted_fea)
-                            if det_lc and det_disp is not None:
-                                st.session_state[f"clipboard_new_up_lc_{det_lc}"] = pasted_fea
+                            det_lc, det_disp = extract_ntop_fea_from_image(pasted_fea, target_part=selected_part)
+                            if det_lc and det_disp is not None and det_lc in part_lcs:
+                                st.session_state[f"clipboard_new_{selected_part}_lc_{det_lc}"] = pasted_fea
                                 st.session_state[ocr_vals_key][det_lc] = det_disp
                                 st.session_state[ocr_rev_key] += 1
-                                st.toast(f"{det_lc} ({LC_INFO[det_lc]['desc']}): {det_disp:.4f} mm")
+                                desc_lbl = part_info.get(det_lc, {}).get("desc", det_lc)
+                                st.toast(f"{det_lc} ({desc_lbl}): {det_disp:.{part_decimals}f} mm")
                                 st.rerun()
                             elif det_disp is not None:
-                                st.warning(f"Detected {det_disp:.4f} mm, but Load Case title was not visible. Paste inside the specific LC tab below.")
+                                st.warning(f"Detected {det_disp:.{part_decimals}f} mm, but Load Case title was not visible. Paste inside the specific LC tab below.")
                             else:
                                 st.warning("Could not read nTop displacement scale from clipboard image.")
                         else:
                             st.warning("No image found on system clipboard. Capture a screenshot first (Win + Shift + S).")
 
                     editor_rows = []
-                    for lc in LC_KEYS:
-                        lbl = f"{lc} ({LC_INFO[lc]['desc']})" if lc in ["LC8", "LC9"] else lc
+                    for lc in part_lcs:
+                        desc_str = part_info.get(lc, {}).get("desc", "")
+                        lbl = f"{lc} ({desc_str})" if lc in ["LC8", "LC9"] and desc_str else lc
                         editor_rows.append({
                             "Load Case": lbl,
                             "Displacement (mm)": st.session_state[ocr_vals_key].get(lc, None),
@@ -2040,8 +2120,8 @@ elif st.session_state.current_page == "Part Management":
                                 "Displacement (mm)",
                                 min_value=0.0,
                                 max_value=10.0,
-                                step=0.0001,
-                                format="%.4f"
+                                step=10 ** (-part_decimals),
+                                format=f"%.{part_decimals}f"
                             )
                         },
                         use_container_width=True,
@@ -2064,29 +2144,30 @@ elif st.session_state.current_page == "Part Management":
 
                     def make_new_lc_ocr_cb(target_lc):
                         def _cb(img):
-                            _, det_disp = extract_ntop_fea_from_image(img)
+                            _, det_disp = extract_ntop_fea_from_image(img, target_part=selected_part)
                             if det_disp is not None:
                                 st.session_state[ocr_vals_key][target_lc] = det_disp
                                 st.session_state[ocr_rev_key] += 1
-                                st.toast(f"{target_lc}: {det_disp:.4f} mm")
+                                st.toast(f"{target_lc}: {det_disp:.{part_decimals}f} mm")
                             else:
                                 st.toast("Image pasted from clipboard.")
                         return _cb
 
                     with st.expander("FEA Screenshots", expanded=False):
-                        lc_tabs = st.tabs([f"{lc}" for lc in LC_KEYS])
-                        for idx_lc, lc in enumerate(LC_KEYS):
+                        lc_tabs = st.tabs([f"{lc}" for lc in part_lcs])
+                        for idx_lc, lc in enumerate(part_lcs):
                             with lc_tabs[idx_lc]:
-                                st.write(f"**{lc} - {LC_INFO[lc]['desc']}**")
+                                desc_lbl = part_info.get(lc, {}).get("desc", lc)
+                                st.write(f"**{lc} - {desc_lbl}**")
                                 pasted_lc_img = render_image_input(
                                     label=f"{lc} Screenshot",
-                                    key=f"new_up_lc_{lc}",
+                                    key=f"new_{selected_part}_lc_{lc}",
                                     ocr_callback=make_new_lc_ocr_cb(lc)
                                 )
                                 if pasted_lc_img is not None:
                                     user_lc_images[lc] = pasted_lc_img
 
-                elif is_structural and selected_part != "UP_01":
+                elif is_structural:
                     st.divider()
                     st.subheader("Structural FEA")
                     src_struct = parse_structural_data(source_iter.get("Stiffness Data", ""))
@@ -2164,7 +2245,7 @@ elif st.session_state.current_page == "Part Management":
                         "Specifications": format_measurements(final_meas),
                         "Tolerancing Data": comp_tol,
                         "Image Path": img_path,
-                        "Stiffness Data": format_stiffness_data(user_stiff_vals) if selected_part == "UP_01" else (json.dumps(user_stiff_vals) if user_stiff_vals else ""),
+                        "Stiffness Data": format_stiffness_data(user_stiff_vals, lc_keys=part_lcs, decimals=part_decimals) if part_lcs else (json.dumps(user_stiff_vals) if user_stiff_vals else ""),
                         "LC Images": format_lc_images(saved_lc_paths),
                         "Justification": comp_just
                     }
@@ -2245,28 +2326,31 @@ elif st.session_state.current_page == "Part Management":
                         current_image_path=row_to_edit.get('Image Path')
                     )
 
-                # FEA editing for UP_01 and brackets
+                # FEA editing for UP_01, HB_01 and brackets
                 user_edit_stiff_vals = {}
                 updated_lc_images_pasted = {}
                 curr_lc_images = parse_lc_images(row_to_edit.get("LC Images", ""))
                 curr_struct = parse_structural_data(row_to_edit.get("Stiffness Data", ""))
+                part_fea_cfg = get_part_fea_config(selected_part)
+                part_lcs = part_fea_cfg.get("LC_KEYS", [])
+                part_info = part_fea_cfg.get("LC_INFO", {})
 
-                if selected_part == "UP_01":
+                if part_lcs:
                     st.divider()
                     st.subheader("FEA Displacements")
 
-                    curr_edit_stiff = parse_stiffness_data(row_to_edit.get("Stiffness Data", ""))
+                    curr_edit_stiff = parse_stiffness_data(row_to_edit.get("Stiffness Data", ""), lc_keys=part_lcs)
                     if not curr_edit_stiff:
                         if "FST15" in str(version_to_edit).upper():
-                            curr_edit_stiff = DEFAULT_FST15_DISPLACEMENTS
+                            curr_edit_stiff = part_fea_cfg.get("DEFAULT_FST15", {})
                         else:
-                            curr_edit_stiff = DEFAULT_FST16_DISPLACEMENTS
+                            curr_edit_stiff = part_fea_cfg.get("DEFAULT_FST16", {})
 
                     ocr_edit_vals_key = f"ocr_vals_edit_{selected_idx}"
                     ocr_edit_rev_key = f"ocr_rev_edit_{selected_idx}"
                     if ocr_edit_vals_key not in st.session_state:
                         st.session_state[ocr_edit_vals_key] = {
-                            lc: curr_edit_stiff.get(lc, LC_INFO[lc]["default_fst16"]) for lc in LC_KEYS
+                            lc: curr_edit_stiff.get(lc, part_info.get(lc, {}).get("default_fst16", 0.0)) for lc in part_lcs
                         }
                     if ocr_edit_rev_key not in st.session_state:
                         st.session_state[ocr_edit_rev_key] = 0
@@ -2275,35 +2359,40 @@ elif st.session_state.current_page == "Part Management":
                     if edit_widget_key in st.session_state and isinstance(st.session_state[edit_widget_key], dict):
                         for r_idx_str, r_changes in st.session_state[edit_widget_key].get("edited_rows", {}).items():
                             r_idx = int(r_idx_str)
-                            if 0 <= r_idx < len(LC_KEYS) and "Displacement (mm)" in r_changes:
-                                st.session_state[ocr_edit_vals_key][LC_KEYS[r_idx]] = r_changes["Displacement (mm)"]
+                            if 0 <= r_idx < len(part_lcs) and "Displacement (mm)" in r_changes:
+                                st.session_state[ocr_edit_vals_key][part_lcs[r_idx]] = r_changes["Displacement (mm)"]
 
+                    part_decimals = part_fea_cfg.get("DECIMALS", 4)
                     if st.button("Paste FEA Print", key=f"btn_ocr_edit_{selected_idx}", use_container_width=True):
                         pasted_fea_edit = grab_image_from_clipboard()
                         if pasted_fea_edit is not None:
-                            det_lc, det_disp = extract_ntop_fea_from_image(pasted_fea_edit)
-                            if det_lc and det_disp is not None:
-                                st.session_state[f"clipboard_edit_up_lc_{selected_idx}_{det_lc}"] = pasted_fea_edit
+                            det_lc, det_disp = extract_ntop_fea_from_image(pasted_fea_edit, target_part=selected_part)
+                            if det_lc and det_disp is not None and det_lc in part_lcs:
+                                st.session_state[f"clipboard_edit_{selected_part}_lc_{selected_idx}_{det_lc}"] = pasted_fea_edit
                                 st.session_state[ocr_edit_vals_key][det_lc] = det_disp
                                 st.session_state[ocr_edit_rev_key] += 1
-                                st.toast(f"{det_lc} ({LC_INFO[det_lc]['desc']}): {det_disp:.4f} mm")
+                                desc_lbl = part_info.get(det_lc, {}).get("desc", det_lc)
+                                st.toast(f"{det_lc} ({desc_lbl}): {det_disp:.{part_decimals}f} mm")
                                 st.rerun()
                             elif det_disp is not None:
-                                st.warning(f"Detected {det_disp:.4f} mm, but Load Case title was not visible. Paste inside the specific LC tab below.")
+                                st.warning(f"Detected {det_disp:.{part_decimals}f} mm, but Load Case title was not visible. Paste inside the specific LC tab below.")
                             else:
                                 st.warning("Could not read nTop displacement scale from clipboard image.")
                         else:
                             st.warning("No image found on system clipboard. Capture a screenshot first (Win + Shift + S).")
 
                     editor_rows_edit = []
-                    for lc in LC_KEYS:
-                        val = st.session_state[ocr_edit_vals_key].get(lc, curr_edit_stiff.get(lc, LC_INFO[lc]["default_fst16"]))
-                        lbl = f"{lc} ({LC_INFO[lc]['desc']})" if lc in ["LC8", "LC9"] else lc
+                    for lc in part_lcs:
+                        def_val = part_info.get(lc, {}).get("default_fst16", 0.0)
+                        val = st.session_state[ocr_edit_vals_key].get(lc, curr_edit_stiff.get(lc, def_val))
+                        desc_str = part_info.get(lc, {}).get("desc", "")
+                        lbl = f"{lc} ({desc_str})" if lc in ["LC8", "LC9"] and desc_str else lc
                         editor_rows_edit.append({
                             "Load Case": lbl,
                             "Displacement (mm)": val,
                         })
                     df_stiff_edit = pd.DataFrame(editor_rows_edit)
+                    df_stiff_edit["Displacement (mm)"] = df_stiff_edit["Displacement (mm)"].astype(float)
 
                     edited_stiff_df_edit = st.data_editor(
                         df_stiff_edit,
@@ -2313,8 +2402,8 @@ elif st.session_state.current_page == "Part Management":
                                 "Displacement (mm)",
                                 min_value=0.0,
                                 max_value=10.0,
-                                step=0.0001,
-                                format="%.4f"
+                                step=10 ** (-part_decimals),
+                                format=f"%.{part_decimals}f"
                             )
                         },
                         use_container_width=True,
@@ -2323,42 +2412,47 @@ elif st.session_state.current_page == "Part Management":
 
                     for r in edited_stiff_df_edit.to_dict('records'):
                         lc_id = r["Load Case"].split(" ")[0]
-                        raw_d = r.get("Displacement (mm)", 0.0)
+                        raw_d = r.get("Displacement (mm)", None)
                         try:
-                            num_d = float(raw_d if raw_d is not None else 0.0)
-                            clean_d = 0.0 if math.isnan(num_d) else num_d
-                            st.session_state[ocr_edit_vals_key][lc_id] = clean_d
-                            user_edit_stiff_vals[lc_id] = clean_d
+                            if raw_d is None or (isinstance(raw_d, float) and math.isnan(raw_d)):
+                                st.session_state[ocr_edit_vals_key][lc_id] = None
+                                user_edit_stiff_vals[lc_id] = 0.0
+                            else:
+                                num_d = float(raw_d)
+                                clean_d = 0.0 if math.isnan(num_d) else num_d
+                                st.session_state[ocr_edit_vals_key][lc_id] = None if math.isnan(num_d) else num_d
+                                user_edit_stiff_vals[lc_id] = clean_d
                         except Exception:
                             user_edit_stiff_vals[lc_id] = 0.0
 
                     def make_edit_lc_ocr_cb(target_lc):
                         def _cb(img):
-                            _, det_disp = extract_ntop_fea_from_image(img)
+                            _, det_disp = extract_ntop_fea_from_image(img, target_part=selected_part)
                             if det_disp is not None:
                                 st.session_state[ocr_edit_vals_key][target_lc] = det_disp
                                 st.session_state[ocr_edit_rev_key] += 1
-                                st.toast(f"{target_lc}: {det_disp:.4f} mm")
+                                st.toast(f"{target_lc}: {det_disp:.{part_decimals}f} mm")
                             else:
                                 st.toast("Image pasted from clipboard.")
                         return _cb
 
                     with st.expander("FEA Screenshots", expanded=False):
-                        lc_tabs_edit = st.tabs([f"{lc}" for lc in LC_KEYS])
-                        for idx_lc, lc in enumerate(LC_KEYS):
+                        lc_tabs_edit = st.tabs([f"{lc}" for lc in part_lcs])
+                        for idx_lc, lc in enumerate(part_lcs):
                             with lc_tabs_edit[idx_lc]:
-                                st.write(f"**{lc} - {LC_INFO[lc]['desc']}**")
+                                desc_lbl = part_info.get(lc, {}).get("desc", lc)
+                                st.write(f"**{lc} - {desc_lbl}**")
                                 cur_lc_p = curr_lc_images.get(lc, None)
                                 p_edit_lc = render_image_input(
                                     label=f"{lc} Screenshot",
-                                    key=f"edit_up_lc_{selected_idx}_{lc}",
+                                    key=f"edit_{selected_part}_lc_{selected_idx}_{lc}",
                                     current_image_path=cur_lc_p,
                                     ocr_callback=make_edit_lc_ocr_cb(lc)
                                 )
                                 if p_edit_lc is not None:
                                     updated_lc_images_pasted[lc] = p_edit_lc
 
-                elif is_structural and selected_part != "UP_01":
+                elif is_structural:
                     st.divider()
                     st.subheader("Structural FEA")
                     curr_struct = parse_structural_data(row_to_edit.get("Stiffness Data", ""))
@@ -2442,8 +2536,8 @@ elif st.session_state.current_page == "Part Management":
                     df_parts.at[selected_idx, 'Weight (g)'] = edit_weight
                     df_parts.at[selected_idx, 'Description'] = edit_desc
                     df_parts.at[selected_idx, 'Specifications'] = format_measurements(final_meas)
-                    if selected_part == "UP_01":
-                        df_parts.at[selected_idx, 'Stiffness Data'] = format_stiffness_data(user_edit_stiff_vals)
+                    if part_lcs:
+                        df_parts.at[selected_idx, 'Stiffness Data'] = format_stiffness_data(user_edit_stiff_vals, lc_keys=part_lcs, decimals=part_decimals)
                         df_parts.at[selected_idx, 'LC Images'] = format_lc_images(final_lc_images)
                     else:
                         if user_edit_stiff_vals:

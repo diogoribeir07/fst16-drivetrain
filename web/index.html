@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FST 16 Drivetrain Tracker</title>
+  <meta name="theme-color" content="#0e1117">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-title">FST 16 Drivetrain</div>
+        <span class="brand-badge">24/7 Web</span>
+      </div>
+      <div id="sidebarNav" style="overflow-y: auto; flex: 1;">
+        <!-- Dynamically populated by app.js -->
+      </div>
+      <div class="sidebar-footer">
+        <div id="userRoleBar" class="role-bar"></div>
+        <button id="btnOpenSync" class="btn-sync-cloud">Cloud Settings</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="contentArea">
+      <div style="padding: 3rem; text-align: center; color: var(--text-muted);">
+        Loading Tracker Data...
+      </div>
+    </main>
+  </div>
+
+  <!-- Dynamic Modals Container -->
+  <div id="modalContainer"></div>
+
+  <!-- SheetJS & Core Scripts -->
+  <script src="xlsx.full.min.js"></script>
+  <script src="github-sync.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
