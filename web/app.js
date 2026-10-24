@@ -2969,27 +2969,38 @@
             <button class="modal-close-btn" onclick="window.closeModal()">x</button>
           </div>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-            Subassembly mass baselines, targets, and included parts configurations.
+            Full wheel assembly configurations, total mass, and component breakdowns.
           </p>
-          <div class="card-table-wrapper" style="margin-bottom: 1.5rem;">
+          <div class="card-table-wrapper" style="margin-bottom: 1.5rem; max-height: 480px; overflow-y: auto;">
             <table class="styled-table">
               <thead>
                 <tr>
-                  <th>Assembly Name</th>
-                  <th>Baseline (g)</th>
-                  <th>Target (g)</th>
-                  <th>Included Parts</th>
-                  <th>Actions</th>
+                  <th style="width: 22%;">Assembly Version</th>
+                  <th style="width: 14%;">Weight (g)</th>
+                  <th style="width: 28%;">Description</th>
+                  <th style="width: 26%;">Part Configuration</th>
+                  <th style="width: 10%; text-align: center;">Actions</th>
                 </tr>
               </thead>
               <tbody id="assTableBody">
                 ${assembliesList.map((a, i) => `
                   <tr>
-                    <td><input type="text" class="form-input" value="${a["Assembly Name"] || a.Assembly || ""}" id="assName_${i}"></td>
-                    <td><input type="number" step="0.1" class="form-input" value="${parseFloat(a["FST15 Baseline (g)"] || a.Baseline || 0)}" id="assBase_${i}"></td>
-                    <td><input type="number" step="0.1" class="form-input" value="${parseFloat(a["Target Weight (g)"] || a.Target || 0)}" id="assTarget_${i}"></td>
-                    <td><input type="text" class="form-input" value="${a["Included Parts"] || a.Parts || ""}" id="assParts_${i}"></td>
-                    <td><button class="btn-action danger" onclick="window.removeAssemblyRow(${i})">Remove</button></td>
+                    <td>
+                      <input type="text" class="form-input" style="font-weight: 600;" value="${a["Assembly Version"] || a["Assembly Name"] || ""}" id="assVer_${i}">
+                      <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 3px;">${a.Date || ""}</div>
+                    </td>
+                    <td>
+                      <input type="number" step="0.1" class="form-input" value="${parseFloat(a["Total Weight (g)"] || a["FST15 Baseline (g)"] || 0).toFixed(1)}" id="assWeight_${i}">
+                    </td>
+                    <td>
+                      <input type="text" class="form-input" value="${a.Description || ""}" id="assDesc_${i}" placeholder="Summary of assembly">
+                    </td>
+                    <td>
+                      <textarea class="form-textarea" style="min-height: 58px; font-size: 0.75rem; font-family: monospace; line-height: 1.3;" id="assConfig_${i}" placeholder="UP_01: v6.0&#10;HB_01: v1.0">${a["Part Configuration"] || a["Included Parts"] || ""}</textarea>
+                    </td>
+                    <td style="text-align: center;">
+                      <button class="btn-action danger" onclick="window.removeAssemblyRow(${i})">Remove</button>
+                    </td>
                   </tr>
                 `).join("")}
               </tbody>
@@ -3010,6 +3021,7 @@
       assembliesData = getCurrentModalAssemblies();
       try {
         await window.DTCloud.commitFile("data/assemblies.json", assembliesData, "Update assemblies configuration");
+        showToast("Assemblies saved successfully!");
         window.closeModal();
         renderAssemblyView();
       } catch (e) {
@@ -3024,16 +3036,18 @@
     const rows = tbody.querySelectorAll("tr");
     const result = [];
     rows.forEach((r, i) => {
-      const name = document.getElementById(`assName_${i}`);
-      const base = document.getElementById(`assBase_${i}`);
-      const target = document.getElementById(`assTarget_${i}`);
-      const parts = document.getElementById(`assParts_${i}`);
-      if (name) {
+      const ver = document.getElementById(`assVer_${i}`);
+      const weight = document.getElementById(`assWeight_${i}`);
+      const desc = document.getElementById(`assDesc_${i}`);
+      const config = document.getElementById(`assConfig_${i}`);
+      if (ver) {
+        const origDate = (assembliesData[i] && assembliesData[i].Date) ? assembliesData[i].Date : new Date().toISOString().replace("T", " ").substring(0, 19);
         result.push({
-          "Assembly Name": name.value.trim(),
-          "FST15 Baseline (g)": parseFloat(base?.value) || 0,
-          "Target Weight (g)": parseFloat(target?.value) || 0,
-          "Included Parts": parts ? parts.value.trim() : ""
+          "Assembly Version": ver.value.trim(),
+          "Date": origDate,
+          "Total Weight (g)": parseFloat(weight ? weight.value : 0) || 0,
+          "Description": desc ? desc.value.trim() : "",
+          "Part Configuration": config ? config.value.trim() : ""
         });
       }
     });
@@ -3042,7 +3056,14 @@
 
   window.addAssemblyRow = function () {
     const list = getCurrentModalAssemblies();
-    list.push({ "Assembly Name": "New Assembly", "FST15 Baseline (g)": 0, "Target Weight (g)": 0, "Included Parts": "" });
+    const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
+    list.push({
+      "Assembly Version": "New Version",
+      "Date": nowStr,
+      "Total Weight (g)": 0,
+      "Description": "",
+      "Part Configuration": ""
+    });
     renderAssembliesModalContent(list);
   };
 
