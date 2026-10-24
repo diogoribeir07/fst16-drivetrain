@@ -435,6 +435,79 @@
     }
   };
 
+  // Direct paste schematic from system clipboard via Clipboard API
+  window.pasteSchematicFromClipboard = async function (targetPart, mode = "edit") {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      showToast("Clipboard API unavailable. Please use Browse File.");
+      return;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith("image/")) {
+            const blob = await item.getType(type);
+            if (mode === "edit") {
+              const evalVer = selectedEvalVersion;
+              const row = partsData.find((p) => p["Part Name"] === targetPart && String(p.Version) === String(evalVer));
+              if (row) {
+                await uploadImagesToIteration([blob], row, targetPart);
+                showToast("Schematic attached successfully!");
+              } else {
+                showToast("Iteration not found.");
+              }
+            } else {
+              const dataUrl = await downscaleImage(blob, 1920, 1080);
+              newIterSchematic = dataUrl;
+              const previewCont = document.getElementById("newSchematicPreview");
+              if (previewCont) {
+                previewCont.innerHTML = `
+                  <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.5rem;">
+                    <img src="${dataUrl}" style="max-height: 60px; border-radius: 4px;">
+                    <span class="tag" style="color: var(--delta-green); border-color: var(--delta-green);">Staged</span>
+                    <button type="button" class="btn-action danger" onclick="window.clearNewSchematic()">Remove</button>
+                  </div>
+                `;
+              }
+              showToast("Schematic staged for new iteration!");
+            }
+            return;
+          }
+        }
+      }
+      showToast("No image found on clipboard. Capture (Win+Shift+S) first.");
+    } catch (err) {
+      console.warn("Clipboard read error:", err);
+      showToast("Clipboard access denied. Please use Browse File.");
+    }
+  };
+
+  window.clearNewSchematic = function () {
+    newIterSchematic = null;
+    const previewCont = document.getElementById("newSchematicPreview");
+    if (previewCont) previewCont.innerHTML = "";
+  };
+
+  function renderSchematicThumbnails(evalRow, partName) {
+    const images = parseImagePaths(evalRow["Image Path"]);
+    if (!images.length) {
+      return '<p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">No CAD schematics currently attached.</p>';
+    }
+    return `
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem;">
+        ${images.map((imgP, i) => {
+          const cleanThumb = `../${imgP.replace(/\\/g, "/")}`;
+          return `
+            <div style="position: relative; display: inline-block;">
+              <img src="${cleanThumb}" style="max-height: 75px; max-width: 130px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer;" onclick="window.openLightbox('${cleanThumb}')">
+              <button type="button" style="position: absolute; top: -6px; right: -6px; background: var(--delta-red); color: #fff; border: 1px solid #fff; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="window.deleteGalleryImage('${partName}', '${evalRow.Version}', ${i})" title="Remove schematic">x</button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
   window.switchToTab = function (tabId) {
     const btn = document.querySelector(`.main-tabs-header .tab-btn[data-tab="${tabId}"]`);
     if (btn) btn.click();
@@ -1387,6 +1460,32 @@
             <textarea id="newIterSpecs" class="form-textarea" placeholder="Feature: Value">${latest.Specifications || ""}</textarea>
           </div>
 
+          <!-- CAD Schematics Section -->
+          <div style="margin: 1.5rem 0 0.75rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">CAD Schematics</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Capture in CAD (Win+Shift+S) and click Paste Schematic, or browse files.
+            </p>
+          </div>
+
+          <div class="paste-action-bar">
+            <button type="button" class="btn-paste-clipboard" onclick="window.pasteSchematicFromClipboard('${partName}', 'new')">Paste Schematic</button>
+            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpNewIterSchematic').click()">Browse File</button>
+            <span class="paste-hint-text">Or drag and drop files below</span>
+          </div>
+          <input type="file" id="fileInpNewIterSchematic" accept="image/*" multiple style="display: none;">
+
+          <div id="newSchematicPreview" style="margin-bottom: 1.25rem;">
+            ${newIterSchematic ? `
+              <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.5rem;">
+                <img src="${newIterSchematic}" style="max-height: 60px; border-radius: 4px;">
+                <span class="tag" style="color: var(--delta-green); border-color: var(--delta-green);">Staged</span>
+                <button type="button" class="btn-action danger" onclick="window.clearNewSchematic()">Remove</button>
+              </div>
+            ` : ""}
+          </div>
+
+          <!-- FEA Displacements Section -->
           ${partLcs.length ? `
           <div style="margin: 1.5rem 0 0.75rem;">
             <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
@@ -1402,30 +1501,40 @@
           </div>
           <input type="file" id="fileInpNewIterFea" accept="image/*" style="display: none;">
 
-          <div class="form-row">
-            ${partLcs.map((lc) => {
-              const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
-              const desc = descMap[lc] || "";
-              return `
-                <div class="form-group">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <label for="newLC_${lc}" style="margin: 0; font-size: 0.8rem;">${lc} ${desc ? `(${desc})` : ""}</label>
-                    <span id="new_badge_${lc}" class="tag" style="display: none; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
-                  </div>
-                  <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="newLC_${lc}" class="form-input" value="${curVal}">
-                </div>
-              `;
-            }).join("")}
+          <div class="card-table-wrapper" style="margin-top: 0.75rem; margin-bottom: 1.5rem; max-width: 650px;">
+            <table class="styled-table">
+              <thead>
+                <tr>
+                  <th style="width: 60%;">Load Case</th>
+                  <th style="width: 40%;">Displacement (mm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${partLcs.map((lc) => {
+                  const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
+                  const desc = descMap[lc] || "";
+                  const hasImg = newIterLcImages[lc];
+                  return `
+                    <tr>
+                      <td>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                          <div>
+                            <strong style="color: #ffffff;">${lc}</strong>
+                            <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 0.5rem;">${desc}</span>
+                          </div>
+                          <span id="new_badge_${lc}" class="tag" style="display: ${hasImg ? "inline-block" : "none"}; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
+                        </div>
+                      </td>
+                      <td>
+                        <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="newLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace;" value="${curVal}">
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
           </div>
           ` : ""}
-
-          <div class="form-group" style="margin-top: 1rem;">
-            <label>CAD Schematic</label>
-            <div class="ocr-dropzone" id="dropzoneNewIterSchematic" style="padding: 0.85rem;">
-              <span id="labelNewIterSchematic" style="font-size: 0.82rem; color: var(--text-muted);">Click to upload schematic image (optional)</span>
-            </div>
-            <input type="file" id="fileInpNewIterSchematic" accept="image/*" style="display: none;">
-          </div>
 
           <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
             <button class="btn-primary" id="btnSaveNewIterInline">Save Iteration</button>
@@ -1477,6 +1586,26 @@
             <textarea id="editIterSpecs" class="form-textarea">${evalRow.Specifications || ""}</textarea>
           </div>
 
+          <!-- CAD Schematics Section -->
+          <div style="margin: 1.5rem 0 0.75rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">CAD Schematics</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Capture in CAD (Win+Shift+S) and click Paste Schematic, or browse files.
+            </p>
+          </div>
+
+          <div class="paste-action-bar">
+            <button type="button" class="btn-paste-clipboard" onclick="window.pasteSchematicFromClipboard('${partName}', 'edit')">Paste Schematic</button>
+            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpEditIterSchematic').click()">Browse File</button>
+            <span class="paste-hint-text">Or drag and drop files below</span>
+          </div>
+          <input type="file" id="fileInpEditIterSchematic" accept="image/*" multiple style="display: none;">
+
+          <div id="editSchematicPreview" style="margin-bottom: 1.25rem;">
+            ${renderSchematicThumbnails(evalRow, partName)}
+          </div>
+
+          <!-- FEA Displacements Section -->
           ${partLcs.length ? `
           <div style="margin: 1.5rem 0 0.75rem;">
             <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
@@ -1492,20 +1621,38 @@
           </div>
           <input type="file" id="fileInpEditIterFea" accept="image/*" style="display: none;">
 
-          <div class="form-row">
-            ${partLcs.map((lc) => {
-              const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
-              const desc = descMap[lc] || "";
-              return `
-                <div class="form-group">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <label for="editLC_${lc}" style="margin: 0; font-size: 0.8rem;">${lc} ${desc ? `(${desc})` : ""}</label>
-                    <span id="edit_badge_${lc}" class="tag" style="display: none; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
-                  </div>
-                  <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" value="${curVal}">
-                </div>
-              `;
-            }).join("")}
+          <div class="card-table-wrapper" style="margin-top: 0.75rem; margin-bottom: 1.5rem; max-width: 650px;">
+            <table class="styled-table">
+              <thead>
+                <tr>
+                  <th style="width: 60%;">Load Case</th>
+                  <th style="width: 40%;">Displacement (mm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${partLcs.map((lc) => {
+                  const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
+                  const desc = descMap[lc] || "";
+                  const hasImg = editIterLcImages[lc] || (evalRow["LC Images"] && parseLcImages(evalRow["LC Images"])[lc]);
+                  return `
+                    <tr>
+                      <td>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                          <div>
+                            <strong style="color: #ffffff;">${lc}</strong>
+                            <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 0.5rem;">${desc}</span>
+                          </div>
+                          <span id="edit_badge_${lc}" class="tag" style="display: ${hasImg ? "inline-block" : "none"}; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
+                        </div>
+                      </td>
+                      <td>
+                        <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace;" value="${curVal}">
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
           </div>
           ` : ""}
 
@@ -1671,12 +1818,22 @@
       };
     }
 
-    // 5. Edit Iteration File Browse Input
+    // 5. Edit Iteration File Browse Input (FEA & Schematic)
     const fileEditFea = document.getElementById("fileInpEditIterFea");
     if (fileEditFea) {
       fileEditFea.onchange = (e) => {
         if (e.target.files && e.target.files[0]) {
           handleFeaScreenshotPasted(e.target.files[0], partName, "edit");
+        }
+      };
+    }
+
+    const fileEditSch = document.getElementById("fileInpEditIterSchematic");
+    if (fileEditSch) {
+      fileEditSch.onchange = async (e) => {
+        if (e.target.files && e.target.files.length) {
+          await uploadImagesToIteration(Array.from(e.target.files), evalRow, partName);
+          showToast("Schematic attached successfully!");
         }
       };
     }
