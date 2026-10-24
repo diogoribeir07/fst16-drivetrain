@@ -315,33 +315,99 @@
     }
   }
 
-  // Lightweight client-side Markdown to HTML renderer
+  // Client-side Markdown and KaTeX math renderer
   function renderMarkdown(md) {
     if (!md) return "";
-    let html = String(md)
+    let str = String(md);
+
+    // 1. Extract and protect Display Math: $$ ... $$
+    const mathBlocks = [];
+    str = str.replace(/\$\$([\s\S]*?)\$\$/g, (match, expr) => {
+      let rendered = "";
+      if (typeof katex !== "undefined" && katex.renderToString) {
+        try {
+          rendered = katex.renderToString(expr.trim(), { displayMode: true, throwOnError: false });
+        } catch (e) {
+          rendered = '<div class="katex-display-error">$$' + expr + '$$</div>';
+        }
+      } else {
+        rendered = '<div class="katex-display-raw">$$' + expr + '$$</div>';
+      }
+      const token = '@@MATHBLOCK_' + mathBlocks.length + '@@';
+      mathBlocks.push(rendered);
+      return '\n\n' + token + '\n\n';
+    });
+
+    // 2. Extract and protect Inline Math: $ ... $ (excluding escaped \$)
+    const mathInlines = [];
+    str = str.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, expr) => {
+      let rendered = "";
+      if (typeof katex !== "undefined" && katex.renderToString) {
+        try {
+          rendered = katex.renderToString(expr.trim(), { displayMode: false, throwOnError: false });
+        } catch (e) {
+          rendered = '<span class="katex-inline-error">$' + expr + '$</span>';
+        }
+      } else {
+        rendered = '<span class="katex-inline-raw">$' + expr + '$</span>';
+      }
+      const token = '@@MATHINLINE_' + mathInlines.length + '@@';
+      mathInlines.push(rendered);
+      return prefix + token;
+    });
+
+    // 3. Parse Markdown with Marked.js (GFM tables, headers, lists)
+    let html = "";
+    const parseFn = typeof marked === "function" ? marked : (typeof marked !== "undefined" && typeof marked.parse === "function" ? marked.parse.bind(marked) : null);
+    if (parseFn) {
+      try {
+        if (typeof marked.setOptions === "function") {
+          marked.setOptions({ gfm: true, breaks: true });
+        }
+        html = parseFn(str);
+      } catch (err) {
+        console.warn("Marked parse error, using fallback:", err);
+        html = fallbackMarkdown(str);
+      }
+    } else {
+      html = fallbackMarkdown(str);
+    }
+
+    // 4. Restore math blocks and inlines
+    mathBlocks.forEach((blockHtml, i) => {
+      const pRegex = new RegExp('<p>\\s*@@MATHBLOCK_' + i + '@@\\s*<\\/p>', 'g');
+      if (pRegex.test(html)) {
+        html = html.replace(pRegex, blockHtml);
+      } else {
+        html = html.replace(new RegExp('@@MATHBLOCK_' + i + '@@', 'g'), blockHtml);
+      }
+    });
+    mathInlines.forEach((inlineHtml, i) => {
+      html = html.replace(new RegExp('@@MATHINLINE_' + i + '@@', 'g'), inlineHtml);
+    });
+
+    return html;
+  }
+
+  function fallbackMarkdown(raw) {
+    let out = String(raw)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-
-    // Headers
-    html = html.replace(/^#### (.*$)/gim, '<h5 style="margin: 0.6rem 0 0.3rem; font-size: 0.95rem; font-weight: 700; color: var(--text-main);">$1</h5>');
-    html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 0.8rem 0 0.4rem; font-size: 1.05rem; font-weight: 700; color: var(--text-main);">$1</h4>');
-    html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 1rem 0 0.5rem; font-size: 1.15rem; font-weight: 700; color: var(--text-main);">$1</h3>');
-    html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 1.2rem 0 0.6rem; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">$1</h2>');
-
-    // Bold and Italic
-    html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-    html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
-
-    // Lists
-    html = html.replace(/^(\d+)\.\s+(.*$)/gim, '<div style="margin-left: 1.25rem; margin-bottom: 0.25rem;"><strong>$1.</strong> $2</div>');
-    html = html.replace(/^[-*]\s+(.*$)/gim, '<div style="margin-left: 1.25rem; margin-bottom: 0.25rem;">&bull; $1</div>');
-
-    // Paragraph breaks
-    html = html.replace(/\n\n+/g, '<div style="height: 0.5rem;"></div>');
-    html = html.replace(/\n/g, '<br>');
-
-    return html;
+    out = out.replace(/^###### (.*$)/gim, '<h6 style="margin: 0.5rem 0 0.2rem; font-size: 0.85rem; font-weight: 700; color: var(--text-muted);">$1</h6>');
+    out = out.replace(/^##### (.*$)/gim, '<h5 style="margin: 0.6rem 0 0.3rem; font-size: 0.92rem; font-weight: 700; color: var(--text-muted);">$1</h5>');
+    out = out.replace(/^#### (.*$)/gim, '<h4 style="margin: 0.8rem 0 0.4rem; font-size: 1.0rem; font-weight: 700; color: var(--text-main);">$1</h4>');
+    out = out.replace(/^### (.*$)/gim, '<h3 style="margin: 1rem 0 0.5rem; font-size: 1.1rem; font-weight: 700; color: var(--text-main);">$1</h3>');
+    out = out.replace(/^## (.*$)/gim, '<h2 style="margin: 1.2rem 0 0.6rem; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">$1</h2>');
+    out = out.replace(/^# (.*$)/gim, '<h1 style="margin: 1.4rem 0 0.7rem; font-size: 1.4rem; font-weight: 700; color: var(--text-main);">$1</h1>');
+    out = out.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+    out = out.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+    out = out.replace(/^[-*]{3,}$/gim, '<hr>');
+    out = out.replace(/^(\d+)\.\s+(.*$)/gim, '<div style="margin-left: 1.25rem; margin-bottom: 0.25rem;"><strong>$1.</strong> $2</div>');
+    out = out.replace(/^[-*]\s+(.*$)/gim, '<div style="margin-left: 1.25rem; margin-bottom: 0.25rem;">&bull; $1</div>');
+    out = out.replace(/\n\n+/g, '<div style="height: 0.5rem;"></div>');
+    out = out.replace(/\n/g, '<br>');
+    return out;
   }
 
   // Direct paste from system clipboard via Clipboard API
