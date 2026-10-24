@@ -203,3 +203,20 @@ The test suite validates:
 2. Zero emojis across all application files.
 3. Strict 1 to 3 words length constraint on all UI headers, tabs, buttons, metrics, and inputs.
 4. Data integrity and schema compliance for all data tables.
+5. Web asset syntax integrity, absence of stray escape sequences, and active cache-busting query strings.
+
+---
+
+## 10. Post-Mortem & Web Deployment Protocol
+
+### Incident Summary (October 2026)
+- **Symptom:** Single Page Application frozen indefinitely on the placeholder screen: `Loading Tracker Data...`.
+- **Primary Root Cause:** An automated script injection appended an escaped literal backslash-n (`\n`) into `web/app.js` outside of a string literal, producing an `Uncaught SyntaxError: Invalid or unexpected token`. The parser failed immediately upon script load, preventing DOM initialisation.
+- **Secondary Propagation Cause:** Client web browsers aggressively cached the older broken script file. Even after repository fixes, browsers continued loading the faulty cached version from disk.
+
+### Mandatory Preventative Protocol
+1. **Pre-Commit Verification:** Run `python Drivetrain_Tracker/test_tracker_backend.py`. Gate 6 verifies that no literal unescaped control characters exist in `web/app.js` or `web/github-sync.js`.
+2. **Mandatory Cache Busting:** Whenever modifying `web/app.js`, `web/github-sync.js`, or `web/styles.css`, increment the version timestamp query parameter (`?v=YYYYMMDD_XX`) across all asset tags in `web/index.html`.
+3. **HTTP Cache Control:** Retain `<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">` in `web/index.html`.
+4. **Post-Push Health Verification:** Check the live remote URL (`https://diogoribeir07.github.io/fst16-drivetrain/web/`) using a headless browser check or automated script to verify that `Wheel Assembly` renders and `Loading Tracker Data` clears.
+

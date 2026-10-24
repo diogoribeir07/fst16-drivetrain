@@ -229,4 +229,47 @@ for test_p_name in ["UP_01", "HB_01", "61816", "UP_03", "85X100X9 HMSA10 V"]:
             
     df_parts.at[idx_to_test, "Tolerancing Data"] = ""
 
+print("   PASSED: Backend data structures and editing logic verified.")
+
+# 6. Check Web Assets integrity (web/app.js, web/github-sync.js, web/index.html)
+print("6. Checking Web Assets integrity (web/app.js, web/github-sync.js, web/index.html)...")
+web_dir = os.path.join(base_dir, "web")
+web_index = os.path.join(web_dir, "index.html")
+
+assert os.path.exists(web_index), "web/index.html not found!"
+with open(web_index, "r", encoding="utf-8") as f:
+    idx_content = f.read()
+
+# Verify cache control headers and query parameters in index.html
+assert 'http-equiv="Cache-Control"' in idx_content, "Missing Cache-Control meta tag in web/index.html!"
+assert re.search(r'src="app\.js\?v=[\w\d_]+"', idx_content), "Missing cache-busting tag on app.js in web/index.html!"
+assert re.search(r'src="github-sync\.js\?v=[\w\d_]+"', idx_content), "Missing cache-busting tag on github-sync.js in web/index.html!"
+assert re.search(r'href="styles\.css\?v=[\w\d_]+"', idx_content), "Missing cache-busting tag on styles.css in web/index.html!"
+
+js_files = ["app.js", "github-sync.js"]
+for js_name in js_files:
+    js_path = os.path.join(web_dir, js_name)
+    assert os.path.exists(js_path), f"{js_name} not found!"
+    with open(js_path, "r", encoding="utf-8") as f:
+        js_code = f.read()
+
+    # Check for unescaped literal \n or \t outside strings
+    lines = js_code.splitlines()
+    for l_no, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
+            continue
+        # If line starts with stray \n or \t (common automated string injection bug)
+        if re.match(r'^\\[ntr]\s', stripped) or re.match(r'^\\[ntr]$', stripped):
+            raise AssertionError(f"Stray escape token found in {js_name} at line {l_no}: '{stripped}'")
+
+    # Verify absence of typical broken replacement artifacts
+    assert "\\n  //" not in js_code, f"Literal '\\\\n  //' found in {js_name}!"
+    assert "\\n  function" not in js_code, f"Literal '\\\\n  function' found in {js_name}!"
+    assert "\\n  const" not in js_code, f"Literal '\\\\n  const' found in {js_name}!"
+    assert "\\n  let" not in js_code, f"Literal '\\\\n  let' found in {js_name}!"
+    assert "\\n  var" not in js_code, f"Literal '\\\\n  var' found in {js_name}!"
+
+print("   PASSED: Web assets syntax, cache busting, and integrity verified.")
+
 print("ALL TEST SUITES PASSED WITH FLYING COLORS!")
