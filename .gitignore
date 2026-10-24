@@ -14,3 +14,7 @@ tools/
 .vscode/
 .idea/
 *.swp
+
+# Sensitive credentials & personal tokens
+Token Git.txt
+*token*.txt

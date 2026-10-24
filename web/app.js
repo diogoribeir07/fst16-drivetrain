@@ -315,6 +315,64 @@
     }
   }
 
+  // Lightweight client-side Markdown to HTML renderer
+  function renderMarkdown(md) {
+    if (!md) return "";
+    let html = String(md)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Headers
+    html = html.replace(/^#### (.*$)/gim, '<h5 style="margin: 0.6rem 0 0.3rem; font-size: 0.95rem; font-weight: 700; color: var(--text-main);">$1</h5>');
+    html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 0.8rem 0 0.4rem; font-size: 1.05rem; font-weight: 700; color: var(--text-main);">$1</h4>');
+    html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 1rem 0 0.5rem; font-size: 1.15rem; font-weight: 700; color: var(--text-main);">$1</h3>');
+    html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 1.2rem 0 0.6rem; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">$1</h2>');
+
+    // Bold and Italic
+    html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+    html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+
+    // Lists
+    html = html.replace(/^(\d+)\.\s+(.*$)/gim, '<div style="margin-left: 1.25rem; margin-bottom: 0.25rem;"><strong>$1.</strong> $2</div>');
+    html = html.replace(/^[-*]\s+(.*$)/gim, '<div style="margin-left: 1.25rem; margin-bottom: 0.25rem;">&bull; $1</div>');
+
+    // Paragraph breaks
+    html = html.replace(/\n\n+/g, '<div style="height: 0.5rem;"></div>');
+    html = html.replace(/\n/g, '<br>');
+
+    return html;
+  }
+
+  // Direct paste from system clipboard via Clipboard API
+  window.pasteFeaFromClipboard = async function (targetPart, mode = "new") {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      showToast("Clipboard API unavailable. Please press Ctrl+V directly.");
+      return;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith("image/")) {
+            const blob = await item.getType(type);
+            await handleFeaScreenshotPasted(blob, targetPart, mode);
+            return;
+          }
+        }
+      }
+      showToast("No screenshot on clipboard. Take a capture (Win+Shift+S) first.");
+    } catch (err) {
+      console.warn("Clipboard read error:", err);
+      showToast("Clipboard access denied. Use Ctrl+V or browse file.");
+    }
+  };
+
+  window.switchToTab = function (tabId) {
+    const btn = document.querySelector(`.main-tabs-header .tab-btn[data-tab="${tabId}"]`);
+    if (btn) btn.click();
+  };
+
   // URL Hash token auto-configuration
   function processUrlHashToken() {
     const hash = window.location.hash;
@@ -901,11 +959,28 @@
       if (evalRow["Stiffness Data"]) evalStiff = JSON.parse(evalRow["Stiffness Data"]);
     } catch (e) {}
 
+    // Check active status of Justification and Tolerances
+    const currJust = String(evalRow.Justification || "").trim();
+    const hasJust = Boolean(currJust && currJust !== "nan" && currJust !== "null");
+
+    let currTols = [];
+    try {
+      if (typeof evalRow["Tolerancing Data"] === "string") {
+        currTols = JSON.parse(evalRow["Tolerancing Data"]) || [];
+      } else if (Array.isArray(evalRow["Tolerancing Data"])) {
+        currTols = evalRow["Tolerancing Data"];
+      }
+    } catch (e) {}
+    const hasTol = Boolean(currTols && currTols.length > 0);
+
     // Related requirements
     const relatedReqs = requirementsData.filter((r) => {
       const rel = String(r["Related Parts"] || "");
       return rel.includes(partName);
     });
+
+    const isWeightZero = Math.abs(weightDiff) < 1e-7;
+    const weightDeltaClass = isWeightZero ? "delta-neutral" : (weightDiff < 0 ? "delta-good" : "delta-bad");
 
     let html = `
       <div class="page-header">
@@ -931,16 +1006,16 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">Weight Delta</div>
-          <div class="metric-value ${weightDiff <= 0 ? "delta-good" : "delta-bad"}">
+          <div class="metric-value ${weightDeltaClass}">
             ${weightDiff <= 0 ? "" : "+"}${weightDiff.toFixed(1)} g
           </div>
-          <div class="metric-sub ${weightDiff <= 0 ? "delta-good" : "delta-bad"}">
+          <div class="metric-sub ${weightDeltaClass}">
             ${refWeight > 0 ? ((weightDiff / refWeight) * 100).toFixed(1) + "%" : "0.0%"}
           </div>
         </div>
       </div>
 
-      <div class="tabs-header">
+      <div class="main-tabs-header tabs-header">
         <button class="tab-btn ${activePartTab === "tabOverview" ? "active" : ""}" data-tab="tabOverview">Overview</button>
         <button class="tab-btn ${activePartTab === "tabJustification" ? "active" : ""}" data-tab="tabJustification">Justification</button>
         <button class="tab-btn ${activePartTab === "tabTolerances" ? "active" : ""}" data-tab="tabTolerances">Tolerances</button>
@@ -951,6 +1026,20 @@
 
       <!-- Tab: Overview -->
       <div class="tab-pane ${activePartTab === "tabOverview" ? "active" : ""}" id="tabOverview">
+        ${hasJust ? `
+        <div class="inline-tab-card" style="margin-bottom: 1.5rem; border-left: 3px solid var(--accent-red); background: rgba(225, 29, 72, 0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-red);">
+              Component Justification
+            </span>
+            ${isEditor() ? `<button class="role-action-btn" onclick="window.switchToTab('tabJustification')">Edit</button>` : ""}
+          </div>
+          <div class="markdown-body" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-main);">
+            ${renderMarkdown(currJust)}
+          </div>
+        </div>
+        ` : ""}
+
         ${iters.length > 1 ? `
         <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap;">
           <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
@@ -989,10 +1078,10 @@
                 <td><strong>Total Weight</strong></td>
                 <td class="mono">${evalWeight.toFixed(1)} g</td>
                 <td class="mono">${refWeight.toFixed(1)} g</td>
-                <td class="mono ${weightDiff <= 0 ? "delta-good" : "delta-bad"}">
+                <td class="mono ${weightDeltaClass}">
                   <strong>${weightDiff <= 0 ? "" : "+"}${weightDiff.toFixed(1)} g</strong>
                 </td>
-                <td class="mono ${weightDiff <= 0 ? "delta-good" : "delta-bad"}">
+                <td class="mono ${weightDeltaClass}">
                   <strong>${refWeight > 0 ? ((weightDiff / refWeight) * 100).toFixed(1) + "%" : "0.0%"}</strong>
                 </td>
               </tr>
@@ -1042,6 +1131,25 @@
         </div>
         `}
 
+        ${hasTol ? `
+        <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">Manufacturing GD&T</h3>
+        <div class="card-table-wrapper">
+          <table class="styled-table">
+            <thead>
+              <tr>
+                <th>Interface</th>
+                <th>Nominal (mm)</th>
+                <th>Fit / Tolerance</th>
+                <th>Roughness / Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderTolRows(evalRow["Tolerancing Data"])}
+            </tbody>
+          </table>
+        </div>
+        ` : ""}
+
         ${relatedReqs.length ? `
         <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">Related Requirements</h3>
         <div class="card-table-wrapper">
@@ -1074,47 +1182,59 @@
       <!-- Tab: Justification -->
       <div class="tab-pane ${activePartTab === "tabJustification" ? "active" : ""}" id="tabJustification">
         <div class="inline-tab-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3 style="font-size: 1.05rem;">Component Justification</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="cbIncludeJust" ${hasJust ? "checked" : ""}>
+              Include Justification
+            </label>
             ${isEditor() ? `<button class="btn-primary" id="btnSaveJustInline">Save Justification</button>` : ""}
           </div>
-          ${isEditor() ? `
-          <div class="form-group">
-            <label for="textareaJustInline">Engineering Justification</label>
-            <textarea id="textareaJustInline" class="form-textarea" style="min-height: 200px;" placeholder="Document mechanical justification, compliance with FSG rules, material choices...">${evalRow.Justification || ""}</textarea>
+          <div id="justEditorContainer" style="display: ${hasJust ? "block" : "none"};">
+            ${isEditor() ? `
+            <div class="form-group">
+              <label for="textareaJustInline">Engineering Justification</label>
+              <textarea id="textareaJustInline" class="form-textarea" style="min-height: 220px;" placeholder="Document mechanical justification in Markdown format...">${currJust}</textarea>
+            </div>
+            ` : `
+            <div class="markdown-body" style="font-size: 0.92rem; line-height: 1.6; color: var(--text-main);">
+              ${renderMarkdown(currJust) || "<span style='color: var(--text-dim);'>No justification recorded.</span>"}
+            </div>
+            `}
           </div>
-          ` : `
-          <div style="font-size: 0.92rem; line-height: 1.6; color: var(--text-main);">
-            ${evalRow.Justification && String(evalRow.Justification).trim() ? String(evalRow.Justification).replace(/\n/g, "<br>") : "<span style='color: var(--text-dim);'>No justification recorded.</span>"}
-          </div>
-          `}
         </div>
       </div>
 
       <!-- Tab: Tolerances -->
       <div class="tab-pane ${activePartTab === "tabTolerances" ? "active" : ""}" id="tabTolerances">
         <div class="inline-tab-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <div>
-              <h3 style="font-size: 1.05rem;">Manufacturing GD&T</h3>
-              <p style="font-size: 0.82rem; color: var(--text-muted);">Tolerances and fits across interfaces</p>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="cbIncludeTol" ${hasTol ? "checked" : ""}>
+              Include Tolerances
+            </label>
+            <div style="display: flex; gap: 0.5rem;">
+              ${isEditor() ? `
+              <button class="btn-action" id="btnEditTol" style="display: ${hasTol ? "inline-block" : "none"};" onclick="window.openTolerancesModal('${partName}')">Edit Tolerances</button>
+              <button class="btn-primary" id="btnSaveTolInline">Save Tolerances</button>
+              ` : ""}
             </div>
-            ${isEditor() ? `<button class="btn-action" onclick="window.openTolerancesModal('${partName}')">Edit Tolerances</button>` : ""}
           </div>
-          <div class="card-table-wrapper">
-            <table class="styled-table">
-              <thead>
-                <tr>
-                  <th>Interface</th>
-                  <th>Nominal (mm)</th>
-                  <th>Fit / Tolerance</th>
-                  <th>Roughness / Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${renderTolRows(evalRow["Tolerancing Data"])}
-              </tbody>
-            </table>
+          <div id="tolTableContainer" style="display: ${hasTol ? "block" : "none"};">
+            <div class="card-table-wrapper">
+              <table class="styled-table">
+                <thead>
+                  <tr>
+                    <th>Interface</th>
+                    <th>Nominal (mm)</th>
+                    <th>Fit / Tolerance</th>
+                    <th>Roughness / Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${renderTolRows(evalRow["Tolerancing Data"])}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -1166,13 +1286,14 @@
           <div style="margin: 1.5rem 0 0.75rem;">
             <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
             <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Capture in nTop (Win+Shift+S) and paste (Ctrl+V) anywhere, or click dropzone below.
+              Capture in nTop (Win+Shift+S) and click Paste from Clipboard, or press Ctrl+V.
             </p>
           </div>
 
-          <div class="ocr-dropzone" id="dropzoneNewIterFea" title="Click or Paste (Ctrl+V) FEA Screenshot">
-            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">Paste FEA Screenshot</div>
-            <div style="font-size: 0.78rem; color: var(--text-muted);">Press Ctrl+V anywhere on this tab, click to choose file, or drag & drop</div>
+          <div class="paste-action-bar">
+            <button type="button" class="btn-paste-clipboard" onclick="window.pasteFeaFromClipboard('${partName}', 'new')">Paste from Clipboard</button>
+            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpNewIterFea').click()">Browse File</button>
+            <span class="paste-hint-text">Or press Ctrl+V anywhere on this tab</span>
           </div>
           <input type="file" id="fileInpNewIterFea" accept="image/*" style="display: none;">
 
@@ -1255,13 +1376,14 @@
           <div style="margin: 1.5rem 0 0.75rem;">
             <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
             <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Capture in nTop and paste (Ctrl+V) or click dropzone to auto-update.
+              Capture in nTop and click Paste from Clipboard, or press Ctrl+V.
             </p>
           </div>
 
-          <div class="ocr-dropzone" id="dropzoneEditIterFea" title="Click or Paste (Ctrl+V) FEA Screenshot">
-            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">Paste FEA Screenshot</div>
-            <div style="font-size: 0.78rem; color: var(--text-muted);">Press Ctrl+V anywhere on this tab, click to choose file, or drag & drop</div>
+          <div class="paste-action-bar">
+            <button type="button" class="btn-paste-clipboard" onclick="window.pasteFeaFromClipboard('${partName}', 'edit')">Paste from Clipboard</button>
+            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpEditIterFea').click()">Browse File</button>
+            <span class="paste-hint-text">Or press Ctrl+V anywhere on this tab</span>
           </div>
           <input type="file" id="fileInpEditIterFea" accept="image/*" style="display: none;">
 
@@ -1318,10 +1440,10 @@
       });
     }
 
-    // Attach Tab Navigation
-    elContentArea.querySelectorAll(".tabs-header .tab-btn").forEach((btn) => {
+    // Attach Tab Navigation strictly to main-tabs-header
+    elContentArea.querySelectorAll(".main-tabs-header .tab-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        elContentArea.querySelectorAll(".tabs-header .tab-btn").forEach((b) => b.classList.remove("active"));
+        elContentArea.querySelectorAll(".main-tabs-header .tab-btn").forEach((b) => b.classList.remove("active"));
         elContentArea.querySelectorAll(".tab-pane").forEach((p) => p.classList.remove("active"));
         btn.classList.add("active");
         const targetId = btn.getAttribute("data-tab");
@@ -1351,11 +1473,23 @@
   }
 
   function attachInlineFormListeners(partName, evalRow, iters) {
-    // 1. Save Justification
+    // 1. Justification Toggle & Save
+    const cbJust = document.getElementById("cbIncludeJust");
+    const justCont = document.getElementById("justEditorContainer");
+    if (cbJust && justCont) {
+      cbJust.onchange = () => {
+        justCont.style.display = cbJust.checked ? "block" : "none";
+      };
+    }
+
     const btnSaveJust = document.getElementById("btnSaveJustInline");
     if (btnSaveJust) {
       btnSaveJust.onclick = async () => {
-        const txt = document.getElementById("textareaJustInline").value.trim();
+        const isEnabled = cbJust ? cbJust.checked : false;
+        const txt = isEnabled && document.getElementById("textareaJustInline")
+          ? document.getElementById("textareaJustInline").value.trim()
+          : null;
+
         partsData.forEach((p) => {
           if (p["Part Name"] === partName) {
             p.Justification = txt || null;
@@ -1363,7 +1497,7 @@
         });
         try {
           await window.DTCloud.commitFile("data/parts.json", partsData, `Update justification for ${partName}`);
-          showToast("Justification saved!");
+          showToast(isEnabled && txt ? "Justification saved!" : "Justification disabled!");
           renderPartView(partName);
         } catch (e) {
           alert("Error saving justification: " + e.message);
@@ -1371,7 +1505,41 @@
       };
     }
 
-    // 2. New Iteration Copy From Selector
+    // 2. Tolerances Toggle & Save
+    const cbTol = document.getElementById("cbIncludeTol");
+    const tolCont = document.getElementById("tolTableContainer");
+    const btnEditTol = document.getElementById("btnEditTol");
+    if (cbTol) {
+      cbTol.onchange = () => {
+        if (tolCont) tolCont.style.display = cbTol.checked ? "block" : "none";
+        if (btnEditTol) btnEditTol.style.display = cbTol.checked ? "inline-block" : "none";
+      };
+    }
+
+    const btnSaveTol = document.getElementById("btnSaveTolInline");
+    if (btnSaveTol) {
+      btnSaveTol.onclick = async () => {
+        const isEnabled = cbTol ? cbTol.checked : false;
+        if (!isEnabled) {
+          partsData.forEach((p) => {
+            if (p["Part Name"] === partName) {
+              p["Tolerancing Data"] = null;
+            }
+          });
+          try {
+            await window.DTCloud.commitFile("data/parts.json", partsData, `Remove tolerances for ${partName}`);
+            showToast("Tolerances disabled!");
+            renderPartView(partName);
+          } catch (e) {
+            alert("Error removing tolerances: " + e.message);
+          }
+        } else {
+          window.openTolerancesModal(partName);
+        }
+      };
+    }
+
+    // 3. New Iteration Copy From Selector
     const selCopy = document.getElementById("selectNewIterSource");
     if (selCopy) {
       selCopy.onchange = (e) => {
@@ -1388,55 +1556,27 @@
       };
     }
 
-    // 3. New Iteration OCR Dropzone & File Input
-    const dropNewFea = document.getElementById("dropzoneNewIterFea");
+    // 4. New Iteration File Browse Input
     const fileNewFea = document.getElementById("fileInpNewIterFea");
-    if (dropNewFea && fileNewFea) {
-      dropNewFea.onclick = () => fileNewFea.click();
+    if (fileNewFea) {
       fileNewFea.onchange = (e) => {
         if (e.target.files && e.target.files[0]) {
           handleFeaScreenshotPasted(e.target.files[0], partName, "new");
         }
       };
-      dropNewFea.ondragover = (e) => {
-        e.preventDefault();
-        dropNewFea.classList.add("dragover");
-      };
-      dropNewFea.ondragleave = () => dropNewFea.classList.remove("dragover");
-      dropNewFea.ondrop = (e) => {
-        e.preventDefault();
-        dropNewFea.classList.remove("dragover");
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-          handleFeaScreenshotPasted(e.dataTransfer.files[0], partName, "new");
-        }
-      };
     }
 
-    // 4. Edit Iteration OCR Dropzone & File Input
-    const dropEditFea = document.getElementById("dropzoneEditIterFea");
+    // 5. Edit Iteration File Browse Input
     const fileEditFea = document.getElementById("fileInpEditIterFea");
-    if (dropEditFea && fileEditFea) {
-      dropEditFea.onclick = () => fileEditFea.click();
+    if (fileEditFea) {
       fileEditFea.onchange = (e) => {
         if (e.target.files && e.target.files[0]) {
           handleFeaScreenshotPasted(e.target.files[0], partName, "edit");
         }
       };
-      dropEditFea.ondragover = (e) => {
-        e.preventDefault();
-        dropEditFea.classList.add("dragover");
-      };
-      dropEditFea.ondragleave = () => dropEditFea.classList.remove("dragover");
-      dropEditFea.ondrop = (e) => {
-        e.preventDefault();
-        dropEditFea.classList.remove("dragover");
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-          handleFeaScreenshotPasted(e.dataTransfer.files[0], partName, "edit");
-        }
-      };
     }
 
-    // 5. New Iteration Schematic Upload
+    // 6. New Iteration Schematic Upload
     const dropNewSch = document.getElementById("dropzoneNewIterSchematic");
     const fileNewSch = document.getElementById("fileInpNewIterSchematic");
     const labelNewSch = document.getElementById("labelNewIterSchematic");
@@ -1452,7 +1592,7 @@
       };
     }
 
-    // 6. Save New Iteration Button
+    // 7. Save New Iteration Button
     const btnSaveNew = document.getElementById("btnSaveNewIterInline");
     if (btnSaveNew) {
       btnSaveNew.onclick = async () => {
@@ -1528,7 +1668,7 @@
       };
     }
 
-    // 7. Edit Iteration Selector & Save Button
+    // 8. Edit Iteration Selector & Save Button
     const editSelVer = document.getElementById("editSelectVer");
     if (editSelVer) {
       editSelVer.onchange = (e) => {
@@ -1720,7 +1860,8 @@
       const rVal = typeof refStiff[lc] === "object" ? refStiff[lc].disp : parseFloat(refStiff[lc] || 0);
       const diff = eVal - rVal;
       const pct = rVal > 0 ? (diff / rVal) * 100 : 0;
-      const isGood = diff <= 0;
+      const isZero = Math.abs(diff) < 1e-7;
+      const deltaClass = isZero ? "delta-neutral" : (diff < 0 ? "delta-good" : "delta-bad");
 
       rowsHtml += `
         <tr>
@@ -1728,11 +1869,11 @@
           <td style="color: var(--text-muted); font-size: 0.82rem;">${descMap[lc] || lc}</td>
           <td class="mono">${eVal.toFixed(decimals)} mm</td>
           <td class="mono">${rVal.toFixed(decimals)} mm</td>
-          <td class="mono ${isGood ? "delta-good" : "delta-bad"}">
-            <strong>${diff <= 0 ? "" : "+"}${diff.toFixed(decimals)} mm</strong>
+          <td class="mono ${deltaClass}">
+            <strong>${isZero ? "0.0" : (diff <= 0 ? "" : "+")}${diff.toFixed(decimals)} mm</strong>
           </td>
-          <td class="mono ${isGood ? "delta-good" : "delta-bad"}">
-            <strong>${diff <= 0 ? "" : "+"}${pct.toFixed(1)}%</strong>
+          <td class="mono ${deltaClass}">
+            <strong>${isZero ? "0.0%" : (diff <= 0 ? "" : "+") + pct.toFixed(1) + "%"}</strong>
           </td>
         </tr>
       `;
@@ -1801,11 +1942,11 @@
     const isDistinct = String(evalRow.Version) !== String(refRow.Version);
 
     let html = `
-      <div style="margin-top: 1.5rem;">
+      <div style="margin-top: 1.5rem;" id="feaScreenshotsContainer">
         <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">FEA Screenshots</h3>
-        <div class="tabs-header" style="margin-bottom: 1rem;">
+        <div class="fea-lc-header">
           ${availLcs.map(lc => `
-            <button class="tab-btn ${lc === activeFeaLc ? "active" : ""}" onclick="window.selectFeaLc('${lc}')">${lc}</button>
+            <button class="fea-lc-btn ${lc === activeFeaLc ? "active" : ""}" onclick="window.selectFeaLc('${lc}')">${lc}</button>
           `).join("")}
         </div>
     `;
@@ -1900,6 +2041,21 @@
 
   window.selectFeaLc = function (lc) {
     activeFeaLc = lc;
+    const iters = partsData.filter((p) => p["Part Name"] === currentView);
+    if (!iters.length) return;
+    const evalRow = iters.find((p) => String(p.Version) === String(selectedEvalVersion)) || iters[iters.length - 1];
+    const refRow = iters.find((p) => String(p.Version) === String(selectedRefVersion)) || iters[0];
+    const container = document.getElementById("feaScreenshotsContainer");
+    if (container) {
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = renderFeaScreenshots(evalRow, refRow);
+      const inner = tempDiv.querySelector("#feaScreenshotsContainer");
+      if (inner) {
+        container.innerHTML = inner.innerHTML;
+        attachFeaListeners(evalRow, currentView);
+        return;
+      }
+    }
     renderCurrentView();
   };
 

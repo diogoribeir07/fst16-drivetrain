@@ -404,6 +404,27 @@ body {
   color: var(--text-main);
 }
 
+.styled-table td.delta-good,
+.styled-table td.delta-good strong,
+.styled-table span.delta-good {
+  color: var(--delta-green) !important;
+  font-weight: 600;
+}
+
+.styled-table td.delta-bad,
+.styled-table td.delta-bad strong,
+.styled-table span.delta-bad {
+  color: var(--delta-red) !important;
+  font-weight: 600;
+}
+
+.styled-table td.delta-neutral,
+.styled-table td.delta-neutral strong,
+.styled-table span.delta-neutral {
+  color: var(--text-muted) !important;
+  font-weight: 500;
+}
+
 .styled-table tr:last-child td {
   border-bottom: none;
 }
@@ -414,6 +435,110 @@ body {
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* FEA LC Screenshots Navigation */
+.fea-lc-header {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.fea-lc-btn {
+  padding: 0.45rem 0.9rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.fea-lc-btn:hover {
+  color: var(--text-main);
+}
+
+.fea-lc-btn.active {
+  color: var(--text-main);
+  border-bottom-color: var(--accent-red);
+}
+
+/* Checkbox Label with Custom Toggle */
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-red);
+}
+
+/* Paste Action Bar */
+.paste-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.1rem;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 1.25rem;
+}
+
+.btn-paste-clipboard {
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background 0.15s ease;
+}
+
+.btn-paste-clipboard:hover {
+  background: var(--accent-red-hover);
+}
+
+.btn-browse-file {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-browse-file:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
+}
+
+.paste-hint-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 /* Modals */
