@@ -11,16 +11,26 @@
   const DEFAULT_BRANCH = "main";
 
   function getConfig() {
+    let token = "";
+    let repo = DEFAULT_REPO;
+    let branch = DEFAULT_BRANCH;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          token = (parsed.token || "").trim();
+          repo = (parsed.repo || DEFAULT_REPO).trim();
+          branch = (parsed.branch || DEFAULT_BRANCH).trim();
+        }
+      }
     } catch (e) {
       console.warn("Could not read fst16_cloud_config", e);
     }
     return {
-      token: "",
-      repo: DEFAULT_REPO,
-      branch: DEFAULT_BRANCH
+      token: token,
+      repo: repo || DEFAULT_REPO,
+      branch: branch || DEFAULT_BRANCH
     };
   }
 
@@ -73,13 +83,11 @@
     // If configured with token, query GitHub API to get the absolute latest commit
     if (cfg.token && cfg.repo) {
       try {
-        const url = `https://api.github.com/repos/${cfg.repo}/contents/${cleanPath}?ref=${cfg.branch}&t=${Date.now()}`;
+        const url = `https://api.github.com/repos/${cfg.repo}/contents/${cleanPath}?ref=${encodeURIComponent(cfg.branch)}&_cb=${Date.now()}`;
         const res = await fetch(url, {
           headers: {
             "Accept": "application/vnd.github.v3+json",
-            "Authorization": `token ${cfg.token}`,
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache"
+            "Authorization": `token ${cfg.token}`
           }
         });
         if (res.ok) {
@@ -105,7 +113,7 @@
   async function commitFile(path, dataObject, commitMessage, retryCount = 0) {
     const cfg = getConfig();
     if (!cfg.token || !cfg.repo) {
-      throw new Error("GitHub Token not configured. Please enter access token.");
+      throw new Error("GitHub Token not configured. Please enter access token in Cloud Settings.");
     }
     const cleanPath = path.startsWith("/") ? path.slice(1) : path;
     const url = `https://api.github.com/repos/${cfg.repo}/contents/${cleanPath}`;
@@ -113,20 +121,32 @@
     // 1. Get current SHA if exists
     let sha = null;
     try {
-      const headRes = await fetch(`${url}?ref=${cfg.branch}&t=${Date.now()}`, {
+      const getUrl = `${url}?ref=${encodeURIComponent(cfg.branch)}&_cb=${Date.now()}`;
+      const headRes = await fetch(getUrl, {
         headers: {
           "Accept": "application/vnd.github.v3+json",
-          "Authorization": `token ${cfg.token}`,
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache"
+          "Authorization": `token ${cfg.token}`
         }
       });
       if (headRes.ok) {
         const headJson = await headRes.json();
         sha = headJson.sha;
+      } else if (headRes.status === 404) {
+        sha = null;
+      } else if (headRes.status === 401) {
+        throw new Error("Invalid or expired GitHub token. Please update your token in Cloud Settings.");
+      } else if (headRes.status === 403) {
+        const errJson = await headRes.json().catch(() => ({}));
+        throw new Error(`GitHub access denied (403): ${errJson.message || "Token missing repository write permissions"}`);
+      } else {
+        const errJson = await headRes.json().catch(() => ({}));
+        throw new Error(`Failed to verify ${cleanPath} status (${headRes.status}): ${errJson.message || headRes.statusText}`);
       }
     } catch (e) {
-      // file might not exist yet
+      if (e.message && (e.message.includes("GitHub") || e.message.includes("token") || e.message.includes("Failed to verify"))) {
+        throw e;
+      }
+      console.warn(`Could not fetch sha for ${cleanPath}:`, e);
     }
 
     // 2. Put file
@@ -152,9 +172,9 @@
       body: JSON.stringify(bodyPayload)
     });
 
-    if (putRes.status === 409 && retryCount < 2) {
+    if (putRes.status === 409 && retryCount < 3) {
       console.warn(`409 Conflict encountered on ${cleanPath}. Retrying commit (attempt ${retryCount + 1})...`);
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 800));
       return commitFile(path, dataObject, commitMessage, retryCount + 1);
     }
 
@@ -169,26 +189,40 @@
   async function commitBinaryFile(path, base64Content, commitMessage, retryCount = 0) {
     const cfg = getConfig();
     if (!cfg.token || !cfg.repo) {
-      throw new Error("GitHub Token not configured. Please enter access token.");
+      throw new Error("GitHub Token not configured. Please enter access token in Cloud Settings.");
     }
     const cleanPath = path.startsWith("/") ? path.slice(1) : path;
     const url = `https://api.github.com/repos/${cfg.repo}/contents/${cleanPath}`;
 
     let sha = null;
     try {
-      const headRes = await fetch(`${url}?ref=${cfg.branch}&t=${Date.now()}`, {
+      const getUrl = `${url}?ref=${encodeURIComponent(cfg.branch)}&_cb=${Date.now()}`;
+      const headRes = await fetch(getUrl, {
         headers: {
           "Accept": "application/vnd.github.v3+json",
-          "Authorization": `token ${cfg.token}`,
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache"
+          "Authorization": `token ${cfg.token}`
         }
       });
       if (headRes.ok) {
         const headJson = await headRes.json();
         sha = headJson.sha;
+      } else if (headRes.status === 404) {
+        sha = null;
+      } else if (headRes.status === 401) {
+        throw new Error("Invalid or expired GitHub token. Please update your token in Cloud Settings.");
+      } else if (headRes.status === 403) {
+        const errJson = await headRes.json().catch(() => ({}));
+        throw new Error(`GitHub access denied (403): ${errJson.message || "Token missing repository write permissions"}`);
+      } else {
+        const errJson = await headRes.json().catch(() => ({}));
+        throw new Error(`Failed to verify ${cleanPath} status (${headRes.status}): ${errJson.message || headRes.statusText}`);
       }
-    } catch (e) {}
+    } catch (e) {
+      if (e.message && (e.message.includes("GitHub") || e.message.includes("token") || e.message.includes("Failed to verify"))) {
+        throw e;
+      }
+      console.warn(`Could not fetch sha for ${cleanPath}:`, e);
+    }
 
     const cleanB64 = base64Content.includes(",") ? base64Content.split(",")[1] : base64Content;
 
@@ -211,9 +245,9 @@
       body: JSON.stringify(bodyPayload)
     });
 
-    if (putRes.status === 409 && retryCount < 2) {
+    if (putRes.status === 409 && retryCount < 3) {
       console.warn(`409 Conflict on binary ${cleanPath}. Retrying (attempt ${retryCount + 1})...`);
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 800));
       return commitBinaryFile(path, base64Content, commitMessage, retryCount + 1);
     }
 

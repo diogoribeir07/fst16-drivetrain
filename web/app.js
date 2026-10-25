@@ -255,8 +255,6 @@
             showToast(`Detected displacement: ${detectedDisp.toFixed(partDecimals)} mm`);
           } else if (detectedLc) {
             showToast(`Detected ${detectedLc}, but could not read displacement scale.`);
-          } else {
-            showToast("Could not identify FEA load case or displacement.");
           }
 
           resolve({ detectedLc, detectedDisp, fullImage: fullDataUrl });
@@ -315,6 +313,32 @@
       }
     } else if (res.detectedDisp !== null) {
       showToast(`Detected ${res.detectedDisp.toFixed(partDecimals)} mm. Enter into target LC.`);
+    } else if (!res.detectedLc && res.fullImage) {
+      // Non-FEA image (e.g. CAD drawing or technical screenshot) -> Attach as CAD schematic!
+      showToast("Attaching image as CAD schematic...");
+      if (mode === "edit") {
+        const evalVer = selectedEvalVersion;
+        const row = partsData.find((p) => p["Part Name"] === targetPart && String(p.Version) === String(evalVer));
+        if (row) {
+          await uploadImagesToIteration([fileOrDataUrl], row, targetPart);
+          showToast("CAD schematic attached!");
+        } else {
+          showToast("Iteration record not found.");
+        }
+      } else {
+        newIterSchematic = res.fullImage;
+        const previewCont = document.getElementById("newSchematicPreview");
+        if (previewCont) {
+          previewCont.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.5rem;">
+              <img src="${res.fullImage}" style="max-height: 60px; border-radius: 4px;">
+              <span class="tag" style="color: var(--delta-green); border-color: var(--delta-green);">Staged</span>
+              <button type="button" class="btn-action danger" onclick="window.clearNewSchematic()">Remove</button>
+            </div>
+          `;
+        }
+        showToast("CAD schematic staged for new iteration!");
+      }
     }
   }
 
