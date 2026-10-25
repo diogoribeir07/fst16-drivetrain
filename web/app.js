@@ -40,6 +40,47 @@
     return window.DTCloud && window.DTCloud.isConfigured();
   }
 
+  // In-memory cache for instant preview of uploaded/pasted images
+  const localImageCache = new Map();
+
+  function formatImageSrc(val) {
+    if (!val) return "";
+    const s = String(val).trim();
+    if (s.startsWith("data:") || s.startsWith("http:") || s.startsWith("https:") || s.startsWith("blob:")) {
+      return s;
+    }
+    const clean = s.replace(/\\/g, "/");
+    const cleanPath = clean.startsWith("/") ? clean.slice(1) : (clean.startsWith("../") ? clean.slice(3) : clean);
+
+    if (localImageCache.has(cleanPath)) {
+      return localImageCache.get(cleanPath);
+    }
+    return `../${cleanPath}`;
+  }
+
+  window.handleImageFallback = function (imgEl, rawPath) {
+    if (!imgEl) return;
+    const p = rawPath || imgEl.getAttribute("data-rawpath") || imgEl.getAttribute("src");
+    if (!p) return;
+    const s = String(p).trim();
+    if (s.startsWith("data:") || s.startsWith("http:") || s.startsWith("https:") || s.startsWith("blob:")) {
+      return;
+    }
+    const clean = s.replace(/\\/g, "/");
+    const cleanPath = clean.startsWith("/") ? clean.slice(1) : (clean.startsWith("../") ? clean.slice(3) : clean);
+
+    if (localImageCache.has(cleanPath)) {
+      imgEl.src = localImageCache.get(cleanPath);
+      return;
+    }
+    const remoteRaw = `https://raw.githubusercontent.com/diogoribeir07/fst16-drivetrain/main/${cleanPath}`;
+    if (imgEl.src !== remoteRaw) {
+      imgEl.src = remoteRaw;
+      return;
+    }
+    imgEl.style.opacity = "0.5";
+  };
+
   // Multi-image schema helpers
   function parseImagePaths(val) {
     if (!val) return [];
@@ -184,24 +225,86 @@
           const nospace = firstLines.replace(/[\s\-_]/g, "");
 
           let detectedLc = null;
-          if (firstLines.includes("pure") && firstLines.includes("brak")) {
-            detectedLc = "LC1";
-          } else if (firstLines.includes("pure") && firstLines.includes("acc")) {
-            detectedLc = "LC2";
-          } else if (firstLines.includes("pure") && (firstLines.includes("corn") || firstLines.includes("com"))) {
-            detectedLc = "LC3";
-          } else if (nospace.includes("b+c2") || nospace.includes("bc2") || (firstLines.includes("brak") && (nospace.includes("cornering2") || nospace.includes("comering2")))) {
-            detectedLc = "LC5";
-          } else if (nospace.includes("b+c1") || nospace.includes("bc1") || nospace.includes("b+c") || (firstLines.includes("brak") && (firstLines.includes("corn") || firstLines.includes("com")))) {
-            detectedLc = "LC4";
-          } else if (nospace.includes("a+c2") || nospace.includes("ac2") || (firstLines.includes("acc") && (nospace.includes("cornering2") || nospace.includes("comering2")))) {
-            detectedLc = "LC7";
-          } else if (nospace.includes("a+c1") || nospace.includes("ac1") || nospace.includes("a+c") || (firstLines.includes("acc") && (firstLines.includes("corn") || firstLines.includes("com")))) {
-            detectedLc = "LC6";
-          } else if (targetPart !== "HB_01") {
-            if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("result2") || nospace.includes("res2")) {
+
+          // 1. Direct explicit LC tag (e.g. "LC5" or "Load Case 5")
+          const mDirect = firstLines.match(/\b(?:lc|load\s*case)\s*([1-9])\b/);
+          if (mDirect) {
+            const num = parseInt(mDirect[1], 10);
+            if (targetPart !== "HB_01" || num <= 7) {
+              detectedLc = `LC${num}`;
+            }
+          }
+
+          // 2. Pure modes
+          if (!detectedLc) {
+            if (firstLines.includes("pure") && firstLines.includes("brak")) {
+              detectedLc = "LC1";
+            } else if (firstLines.includes("pure") && firstLines.includes("acc")) {
+              detectedLc = "LC2";
+            } else if (firstLines.includes("pure") && (firstLines.includes("corn") || firstLines.includes("com"))) {
+              detectedLc = "LC3";
+            }
+          }
+
+          // 3. Braking + Cornering (LC4 vs LC5)
+          if (!detectedLc) {
+            const isBc = (firstLines.includes("brak") && (firstLines.includes("corn") || firstLines.includes("com"))) || nospace.includes("b+c") || nospace.includes("bc");
+            if (isBc) {
+              const has2 = /(?:cornering|comering|b\+c|bc)\s*[\(:\[\-]?\s*2/.test(firstLines) || nospace.includes("cornering2") || nospace.includes("comering2") || nospace.includes("bc2") || nospace.includes("b+c2") || nospace.includes("case5");
+              const has1 = /(?:cornering|comering|b\+c|bc)\s*[\(:\[\-]?\s*1/.test(firstLines) || nospace.includes("cornering1") || nospace.includes("comering1") || nospace.includes("bc1") || nospace.includes("b+c1") || nospace.includes("case4");
+              if (has2 && !has1) {
+                detectedLc = "LC5";
+              } else if (has1 && !has2) {
+                detectedLc = "LC4";
+              } else {
+                let titleLine = "";
+                for (const l of lines.slice(0, 5)) {
+                  const ll = l.toLowerCase();
+                  if (ll.includes("brak") || ll.includes("b+c") || ll.includes("bc") || ll.includes("corn")) {
+                    titleLine += " " + ll;
+                  }
+                }
+                if (/\b2\b|\(2\)/.test(titleLine)) {
+                  detectedLc = "LC5";
+                } else {
+                  detectedLc = "LC4";
+                }
+              }
+            }
+          }
+
+          // 4. Acceleration + Cornering (LC6 vs LC7)
+          if (!detectedLc) {
+            const isAc = (firstLines.includes("acc") && (firstLines.includes("corn") || firstLines.includes("com"))) || nospace.includes("a+c") || nospace.includes("ac");
+            if (isAc) {
+              const has2 = /(?:cornering|comering|a\+c|ac)\s*[\(:\[\-]?\s*2/.test(firstLines) || nospace.includes("cornering2") || nospace.includes("comering2") || nospace.includes("ac2") || nospace.includes("a+c2") || nospace.includes("case7");
+              const has1 = /(?:cornering|comering|a\+c|ac)\s*[\(:\[\-]?\s*1/.test(firstLines) || nospace.includes("cornering1") || nospace.includes("comering1") || nospace.includes("ac1") || nospace.includes("a+c1") || nospace.includes("case6");
+              if (has2 && !has1) {
+                detectedLc = "LC7";
+              } else if (has1 && !has2) {
+                detectedLc = "LC6";
+              } else {
+                let titleLine = "";
+                for (const l of lines.slice(0, 5)) {
+                  const ll = l.toLowerCase();
+                  if (ll.includes("acc") || ll.includes("a+c") || ll.includes("ac") || ll.includes("corn")) {
+                    titleLine += " " + ll;
+                  }
+                }
+                if (/\b2\b|\(2\)/.test(titleLine)) {
+                  detectedLc = "LC7";
+                } else {
+                  detectedLc = "LC6";
+                }
+              }
+            }
+          }
+
+          // 5. LC8 / LC9 (for UP_01)
+          if (!detectedLc && targetPart !== "HB_01") {
+            if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("result2") || nospace.includes("res2") || nospace.includes("-1.0kn")) {
               detectedLc = "LC9";
-            } else if (nospace.includes("1kn") || nospace.includes("ikn") || nospace.includes("result1")) {
+            } else if (nospace.includes("1kn") || nospace.includes("ikn") || nospace.includes("result1") || nospace.includes("res1") || nospace.includes("1.0kn")) {
               detectedLc = "LC8";
             }
           }
@@ -522,10 +625,10 @@
     return `
       <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem;">
         ${images.map((imgP, i) => {
-          const cleanThumb = `../${imgP.replace(/\\/g, "/")}`;
+          const src = formatImageSrc(imgP);
           return `
             <div style="position: relative; display: inline-block;">
-              <img src="${cleanThumb}" style="max-height: 75px; max-width: 130px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer;" onclick="window.openLightbox('${cleanThumb}')">
+              <img src="${src}" data-rawpath="${imgP}" onerror="window.handleImageFallback(this, '${imgP}')" style="max-height: 75px; max-width: 130px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer;" onclick="window.openLightbox(this.src)">
               <button type="button" style="position: absolute; top: -6px; right: -6px; background: var(--delta-red); color: #fff; border: 1px solid #fff; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="window.deleteGalleryImage('${partName}', '${evalRow.Version}', ${i})" title="Remove schematic">x</button>
             </div>
           `;
@@ -1191,10 +1294,10 @@
   }
 
   function renderDiagramCard(path, title, desc) {
-    const cleanPath = `../${path.replace(/\\/g, "/")}`;
+    const cleanPath = formatImageSrc(path);
     return `
-      <div class="diagram-card" onclick="window.openLightbox('${cleanPath}')">
-        <img src="${cleanPath}" alt="${title}" class="diagram-preview" onerror="this.src='';">
+      <div class="diagram-card" onclick="window.openLightbox(this.querySelector('img')?.src)">
+        <img src="${cleanPath}" data-rawpath="${path}" alt="${title}" class="diagram-preview" onerror="window.handleImageFallback(this, '${path}')">
         <div class="diagram-body">
           <div class="diagram-title">${title}</div>
           <div class="diagram-desc">${desc}</div>
@@ -1956,10 +2059,10 @@
     if (!imgs.length) {
       return `<div style="color: var(--text-dim); font-size: 0.82rem; padding: 1rem; text-align: center;">No schematic image.</div>`;
     }
-    const clean = imgs[0].startsWith("data:") ? imgs[0] : `../${imgs[0]}`;
+    const clean = formatImageSrc(imgs[0]);
     return `
-      <div style="cursor: pointer; text-align: center; margin-top: 0.5rem;" onclick="window.openLightbox('${clean}')">
-        <img src="${clean}" alt="Schematic" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--border-color);" onerror="this.src='';">
+      <div style="cursor: pointer; text-align: center; margin-top: 0.5rem;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+        <img src="${clean}" data-rawpath="${imgs[0]}" alt="Schematic" onerror="window.handleImageFallback(this, '${imgs[0]}')" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
       </div>
     `;
   }
@@ -2138,6 +2241,25 @@
         } catch (e) {}
         Object.assign(finalLcImages, newIterLcImages);
 
+        let stagedImagePath = latest["Image Path"] || null;
+        if (newIterSchematic) {
+          const vClean = formatVersion(v).replace(/[^a-zA-Z0-9_-]/g, "_");
+          const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+          const filename = `images/${partName}_${vClean}_${timestamp}_sch.png`;
+          localImageCache.set(filename, newIterSchematic);
+          if (window.DTCloud && window.DTCloud.isConfigured()) {
+            try {
+              await window.DTCloud.commitBinaryFile(filename, newIterSchematic, `Upload ${filename}`);
+              stagedImagePath = filename;
+            } catch (err) {
+              console.warn("Failed to upload binary schematic:", err);
+              stagedImagePath = newIterSchematic;
+            }
+          } else {
+            stagedImagePath = newIterSchematic;
+          }
+        }
+
         const newRow = {
           Subassembly: latest.Subassembly || "Drivetrain",
           "Part Name": partName,
@@ -2146,7 +2268,7 @@
           "Weight (g)": w,
           Description: desc,
           Specifications: specs,
-          "Image Path": newIterSchematic || latest["Image Path"] || null,
+          "Image Path": stagedImagePath,
           "Stiffness Data": partLcs.length ? JSON.stringify(stiffObj) : latest["Stiffness Data"],
           "LC Images": Object.keys(finalLcImages).length ? JSON.stringify(finalLcImages) : null,
           "Tolerancing Data": latest["Tolerancing Data"] || null,
@@ -2439,8 +2561,8 @@
     const evalImg = evalLcMap[activeFeaLc];
     const refImg = refLcMap[activeFeaLc];
 
-    const cleanEval = evalImg ? `../${evalImg.replace(/\\/g, "/")}` : null;
-    const cleanRef = refImg ? `../${refImg.replace(/\\/g, "/")}` : null;
+    const cleanEval = evalImg ? formatImageSrc(evalImg) : null;
+    const cleanRef = refImg ? formatImageSrc(refImg) : null;
     const isDistinct = String(evalRow.Version) !== String(refRow.Version);
 
     let html = `
@@ -2460,16 +2582,16 @@
             <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
               Baseline: ${formatVersion(refRow.Version)} (${activeFeaLc})
             </div>
-            <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox('${cleanRef}')">
-              <img src="${cleanRef}" alt="${activeFeaLc} Baseline" class="gallery-main-img" onerror="this.src='';">
+            <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+              <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc} Baseline" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img">
             </div>
           </div>
           <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
             <div style="font-size: 0.82rem; font-weight: 600; color: var(--accent-red); margin-bottom: 0.5rem;">
               Evaluated: ${formatVersion(evalRow.Version)} (${activeFeaLc})
             </div>
-            <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox('${cleanEval}')">
-              <img src="${cleanEval}" alt="${activeFeaLc} Evaluated" class="gallery-main-img" onerror="this.src='';">
+            <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+              <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc} Evaluated" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img">
             </div>
           </div>
         </div>
@@ -2480,8 +2602,8 @@
           <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
             ${formatVersion(evalRow.Version)} (${activeFeaLc})
           </div>
-          <div class="gallery-viewport" style="min-height: 320px; max-height: 480px;" onclick="window.openLightbox('${cleanEval}')">
-            <img src="${cleanEval}" alt="${activeFeaLc}" class="gallery-main-img" onerror="this.src='';">
+          <div class="gallery-viewport" style="min-height: 320px; max-height: 480px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+            <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc}" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img">
           </div>
         </div>
       `;
@@ -2491,8 +2613,8 @@
           <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
             ${formatVersion(refRow.Version)} (${activeFeaLc})
           </div>
-          <div class="gallery-viewport" style="min-height: 320px; max-height: 480px;" onclick="window.openLightbox('${cleanRef}')">
-            <img src="${cleanRef}" alt="${activeFeaLc}" class="gallery-main-img" onerror="this.src='';">
+          <div class="gallery-viewport" style="min-height: 320px; max-height: 480px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+            <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc}" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img">
           </div>
         </div>
       `;
@@ -2524,6 +2646,8 @@
         const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
         const vClean = formatVersion(evalRow.Version).replace(/[^a-zA-Z0-9_-]/g, "_");
         const filename = `images/${partName}_${vClean}_${activeFeaLc}_${timestamp}.png`;
+
+        localImageCache.set(filename, dataUrl);
 
         if (window.DTCloud.isConfigured()) {
           await window.DTCloud.commitBinaryFile(filename, dataUrl, `Upload ${filename}`);
@@ -2569,7 +2693,7 @@
     }
 
     const currentImg = images[activeGalleryIndex];
-    const currentClean = currentImg ? `../${currentImg.replace(/\\/g, "/")}` : "";
+    const currentClean = currentImg ? formatImageSrc(currentImg) : "";
 
     let html = `
       <div class="gallery-container">
@@ -2577,8 +2701,8 @@
 
     if (images.length > 0) {
       html += `
-        <div class="gallery-viewport" onclick="window.openLightbox('${currentClean}')">
-          <img src="${currentClean}" alt="CAD Schematic" class="gallery-main-img" onerror="this.src='';">
+        <div class="gallery-viewport" onclick="window.openLightbox(this.querySelector('img')?.src)">
+          <img src="${currentClean}" data-rawpath="${currentImg}" alt="CAD Schematic" class="gallery-main-img" onerror="window.handleImageFallback(this, '${currentImg}')">
           <span class="gallery-count-badge">${activeGalleryIndex + 1} / ${images.length}</span>
         </div>
       `;
@@ -2587,11 +2711,11 @@
         html += `
           <div class="gallery-filmstrip">
             ${images.map((imgP, i) => {
-              const cleanThumb = `../${imgP.replace(/\\/g, "/")}`;
+              const cleanThumb = formatImageSrc(imgP);
               const isActive = i === activeGalleryIndex ? "active" : "";
               return `
                 <div class="gallery-thumb-item">
-                  <img src="${cleanThumb}" alt="Thumbnail ${i + 1}" class="gallery-thumb ${isActive}" onclick="window.selectGalleryImage(${i})">
+                  <img src="${cleanThumb}" data-rawpath="${imgP}" alt="Thumbnail ${i + 1}" class="gallery-thumb ${isActive}" onerror="window.handleImageFallback(this, '${imgP}')" onclick="window.selectGalleryImage(${i})">
                   ${isEditor() ? `<button class="gallery-thumb-delete" onclick="window.deleteGalleryImage('${partName}', '${evalRow.Version}', ${i})">X</button>` : ""}
                 </div>
               `;
@@ -2682,9 +2806,9 @@
       }
     };
 
-    // Global paste listener when viewing this part
+    // Global paste listener when viewing this part schematic tab
     window.onpaste = async (e) => {
-      if (currentView !== partName) return;
+      if (currentView !== partName || activePartTab !== "tabSchematic") return;
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
       const imageFiles = [];
       for (const item of items) {
@@ -2711,10 +2835,14 @@
         const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
         const filename = `images/${partName}_${versionClean}_${timestamp}_${i + 1}.png`;
 
-        if (window.DTCloud.isConfigured()) {
+        localImageCache.set(filename, dataUrl);
+
+        if (window.DTCloud && window.DTCloud.isConfigured()) {
           await window.DTCloud.commitBinaryFile(filename, dataUrl, `Upload ${filename}`);
+          existingImages.push(filename);
+        } else {
+          existingImages.push(dataUrl);
         }
-        existingImages.push(filename);
       } catch (err) {
         console.error("Image upload failed:", err);
         alert("Image upload error: " + err.message);
