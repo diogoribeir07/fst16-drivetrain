@@ -192,11 +192,11 @@
             detectedLc = "LC3";
           } else if (nospace.includes("b+c2") || nospace.includes("bc2") || (firstLines.includes("brak") && (nospace.includes("cornering2") || nospace.includes("comering2")))) {
             detectedLc = "LC5";
-          } else if (nospace.includes("b+c1") || nospace.includes("bc1") || nospace.includes("b+c") || (firstLines.includes("brak") && (first_lines.includes("corn") || first_lines.includes("com")))) {
+          } else if (nospace.includes("b+c1") || nospace.includes("bc1") || nospace.includes("b+c") || (firstLines.includes("brak") && (firstLines.includes("corn") || firstLines.includes("com")))) {
             detectedLc = "LC4";
           } else if (nospace.includes("a+c2") || nospace.includes("ac2") || (firstLines.includes("acc") && (nospace.includes("cornering2") || nospace.includes("comering2")))) {
             detectedLc = "LC7";
-          } else if (nospace.includes("a+c1") || nospace.includes("ac1") || nospace.includes("a+c") || (firstLines.includes("acc") && (first_lines.includes("corn") || first_lines.includes("com")))) {
+          } else if (nospace.includes("a+c1") || nospace.includes("ac1") || nospace.includes("a+c") || (firstLines.includes("acc") && (firstLines.includes("corn") || firstLines.includes("com")))) {
             detectedLc = "LC6";
           } else if (targetPart !== "HB_01") {
             if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("result2") || nospace.includes("res2")) {
