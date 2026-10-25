@@ -67,7 +67,7 @@
     "Explanation": "To ensure maximum performance in dynamic events",
     "Verification": "FEA",
     "Validation": "With the jig of local stiffness and an adapter on the hub, apply loads with car in vertical stance",
-    "Related Parts": "UP_01, UpperSupport Version"
+    "Related Parts": "UP_01, HB_01, UpperSupport Version"
   },
   {
     "ID": "DT.A.01",

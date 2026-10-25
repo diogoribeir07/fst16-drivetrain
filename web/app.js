@@ -188,7 +188,7 @@
           const cropX = Math.floor(w * 0.60);
           const cropY = Math.floor(h * 0.12);
           const cropW = w - cropX;
-          const cropH = Math.floor(h * 0.65);
+          const cropH = Math.floor(h * 0.85);
 
           const canvas = document.createElement("canvas");
           const scale = 2.5;
@@ -222,7 +222,7 @@
           // Match Load Case keywords
           const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
           const firstLines = lines.slice(0, 5).join(" ").toLowerCase();
-          const nospace = firstLines.replace(/[\s\-_]/g, "");
+          const nospace = firstLines.replace(/[\s_]/g, "");
 
           let detectedLc = null;
 
@@ -230,9 +230,7 @@
           const mDirect = firstLines.match(/\b(?:lc|load\s*case)\s*([1-9])\b/);
           if (mDirect) {
             const num = parseInt(mDirect[1], 10);
-            if (targetPart !== "HB_01" || num <= 7) {
-              detectedLc = `LC${num}`;
-            }
+            detectedLc = `LC${num}`;
           }
 
           // 2. Pure modes
@@ -250,8 +248,16 @@
           if (!detectedLc) {
             const isBc = (firstLines.includes("brak") && (firstLines.includes("corn") || firstLines.includes("com"))) || nospace.includes("b+c") || nospace.includes("bc");
             if (isBc) {
-              const has2 = /(?:cornering|comering|b\+c|bc)\s*[\(:\[\-]?\s*2/.test(firstLines) || nospace.includes("cornering2") || nospace.includes("comering2") || nospace.includes("bc2") || nospace.includes("b+c2") || nospace.includes("case5");
-              const has1 = /(?:cornering|comering|b\+c|bc)\s*[\(:\[\-]?\s*1/.test(firstLines) || nospace.includes("cornering1") || nospace.includes("comering1") || nospace.includes("bc1") || nospace.includes("b+c1") || nospace.includes("case4");
+              const has2 = /(?:cornering|comering|b\+c|bc)\s*[\(:[\]\-]*(?:[2\?zZ]|two|case\s*5)/i.test(firstLines) ||
+                           nospace.includes("cornering2") || nospace.includes("cornering?") || nospace.includes("corneringz") ||
+                           nospace.includes("comering2") || nospace.includes("comering?") ||
+                           nospace.includes("bc2") || nospace.includes("b+c2") || nospace.includes("case5") || nospace.includes("lc5");
+
+              const has1 = /(?:cornering|comering|b\+c|bc)\s*[\(:[\]\-]*(?:[1l\|!iI]|one|case\s*4)/i.test(firstLines) ||
+                           nospace.includes("cornering1") || nospace.includes("corneringl") || nospace.includes("cornering|") ||
+                           nospace.includes("comering1") || nospace.includes("comeringl") ||
+                           nospace.includes("bc1") || nospace.includes("b+c1") || nospace.includes("case4") || nospace.includes("lc4");
+
               if (has2 && !has1) {
                 detectedLc = "LC5";
               } else if (has1 && !has2) {
@@ -264,8 +270,10 @@
                     titleLine += " " + ll;
                   }
                 }
-                if (/\b2\b|\(2\)/.test(titleLine)) {
+                if (/[2\?zZ]|\(2\)/i.test(titleLine)) {
                   detectedLc = "LC5";
+                } else if (/[1l\|!iI]|\(1\)/i.test(titleLine)) {
+                  detectedLc = "LC4";
                 } else {
                   detectedLc = "LC4";
                 }
@@ -277,8 +285,16 @@
           if (!detectedLc) {
             const isAc = (firstLines.includes("acc") && (firstLines.includes("corn") || firstLines.includes("com"))) || nospace.includes("a+c") || nospace.includes("ac");
             if (isAc) {
-              const has2 = /(?:cornering|comering|a\+c|ac)\s*[\(:\[\-]?\s*2/.test(firstLines) || nospace.includes("cornering2") || nospace.includes("comering2") || nospace.includes("ac2") || nospace.includes("a+c2") || nospace.includes("case7");
-              const has1 = /(?:cornering|comering|a\+c|ac)\s*[\(:\[\-]?\s*1/.test(firstLines) || nospace.includes("cornering1") || nospace.includes("comering1") || nospace.includes("ac1") || nospace.includes("a+c1") || nospace.includes("case6");
+              const has2 = /(?:cornering|comering|a\+c|ac)\s*[\(:[\]\-]*(?:[2\?zZ]|two|case\s*7)/i.test(firstLines) ||
+                           nospace.includes("cornering2") || nospace.includes("cornering?") || nospace.includes("corneringz") ||
+                           nospace.includes("comering2") || nospace.includes("comering?") ||
+                           nospace.includes("ac2") || nospace.includes("a+c2") || nospace.includes("case7") || nospace.includes("lc7");
+
+              const has1 = /(?:cornering|comering|a\+c|ac)\s*[\(:[\]\-]*(?:[1l\|!iI]|one|case\s*6)/i.test(firstLines) ||
+                           nospace.includes("cornering1") || nospace.includes("corneringl") || nospace.includes("cornering|") ||
+                           nospace.includes("comering1") || nospace.includes("comeringl") ||
+                           nospace.includes("ac1") || nospace.includes("a+c1") || nospace.includes("case6") || nospace.includes("lc6");
+
               if (has2 && !has1) {
                 detectedLc = "LC7";
               } else if (has1 && !has2) {
@@ -291,8 +307,10 @@
                     titleLine += " " + ll;
                   }
                 }
-                if (/\b2\b|\(2\)/.test(titleLine)) {
+                if (/[2\?zZ]|\(2\)/i.test(titleLine)) {
                   detectedLc = "LC7";
+                } else if (/[1l\|!iI]|\(1\)/i.test(titleLine)) {
+                  detectedLc = "LC6";
                 } else {
                   detectedLc = "LC6";
                 }
@@ -300,11 +318,11 @@
             }
           }
 
-          // 5. LC8 / LC9 (for UP_01)
-          if (!detectedLc && targetPart !== "HB_01") {
-            if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("result2") || nospace.includes("res2") || nospace.includes("-1.0kn")) {
+          // 5. LC8 / LC9 (for UP_01 and HB_01)
+          if (!detectedLc) {
+            if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("loadcase9") || nospace.includes("lc9") || nospace.includes("result2") || nospace.includes("res2") || nospace.includes("-1.0kn")) {
               detectedLc = "LC9";
-            } else if (nospace.includes("1kn") || nospace.includes("ikn") || nospace.includes("result1") || nospace.includes("res1") || nospace.includes("1.0kn")) {
+            } else if (nospace.includes("1kn") || nospace.includes("ikn") || nospace.includes("loadcase8") || nospace.includes("lc8") || nospace.includes("result1") || nospace.includes("res1") || nospace.includes("1.0kn")) {
               detectedLc = "LC8";
             }
           }
@@ -1453,10 +1471,8 @@
 
     const isHB = partName === "HB_01";
     const isUP = partName === "UP_01";
-    const partLcs = isUP
+    const partLcs = (isUP || isHB)
       ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-      : isHB
-      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
       : [];
 
     const descMap = {
@@ -2218,10 +2234,8 @@
 
         const isHB = partName === "HB_01";
         const isUP = partName === "UP_01";
-        const partLcs = isUP
+        const partLcs = (isUP || isHB)
           ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-          : isHB
-          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
           : [];
 
         const stiffObj = {};
@@ -2318,10 +2332,8 @@
 
         const isHB = partName === "HB_01";
         const isUP = partName === "UP_01";
-        const partLcs = isUP
+        const partLcs = (isUP || isHB)
           ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-          : isHB
-          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
           : [];
 
         if (partLcs.length) {
@@ -2450,9 +2462,7 @@
 
     let lcKeys = Object.keys(evalStiff).length ? Object.keys(evalStiff) : Object.keys(refStiff);
     if (!lcKeys.length) {
-      if (evalRow["Part Name"] === "HB_01") {
-        lcKeys = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"];
-      } else if (evalRow["Part Name"] === "UP_01") {
+      if (evalRow["Part Name"] === "HB_01" || evalRow["Part Name"] === "UP_01") {
         lcKeys = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
       } else {
         const fallbackMsg = `
@@ -2537,10 +2547,8 @@
     const partName = evalRow["Part Name"];
 
     let allLcs = [];
-    if (partName === "UP_01") {
+    if (partName === "UP_01" || partName === "HB_01") {
       allLcs = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
-    } else if (partName === "HB_01") {
-      allLcs = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"];
     } else {
       allLcs = Array.from(new Set([...Object.keys(evalLcMap), ...Object.keys(refLcMap)]));
     }
@@ -2937,10 +2945,8 @@
     const nextVer = incrementVersion(latest.Version || "1.0");
     const isHB = partName === "HB_01";
     const isUP = partName === "UP_01";
-    const partLcs = isUP
+    const partLcs = (isUP || isHB)
       ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-      : isHB
-      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
       : [];
 
     let latestStiff = {};
@@ -3084,10 +3090,8 @@
 
     const isHB = partName === "HB_01";
     const isUP = partName === "UP_01";
-    const partLcs = isUP
+    const partLcs = (isUP || isHB)
       ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-      : isHB
-      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"]
       : [];
 
     let currentStiff = {};

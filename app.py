@@ -405,7 +405,7 @@ FEA_PARTS_CONFIG = {
     },
     "HB_01": {
         "DECIMALS": 5,
-        "LC_KEYS": ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7"],
+        "LC_KEYS": ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"],
         "LC_INFO": {
             "LC1": {"desc": "Pure Braking", "ref_fst15": 0.0, "default_fst16": None},
             "LC2": {"desc": "Pure Acceleration", "ref_fst15": 0.0, "default_fst16": None},
@@ -414,14 +414,16 @@ FEA_PARTS_CONFIG = {
             "LC5": {"desc": "Braking + Cornering 2", "ref_fst15": 0.0, "default_fst16": None},
             "LC6": {"desc": "Acceleration + Cornering 1", "ref_fst15": 0.0, "default_fst16": None},
             "LC7": {"desc": "Acceleration + Cornering 2", "ref_fst15": 0.0, "default_fst16": None},
+            "LC8": {"desc": "1kN Fy", "ref_fst15": 0.0, "default_fst16": None},
+            "LC9": {"desc": "-1kN Fy", "ref_fst15": 0.0, "default_fst16": None},
         },
         "DEFAULT_FST15": {
             "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0,
-            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0
+            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0, "LC8": 0.0, "LC9": 0.0
         },
         "DEFAULT_FST16": {
             "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0,
-            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0
+            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0, "LC8": 0.0, "LC9": 0.0
         }
     }
 }
