@@ -726,5 +726,19 @@
     "LC Images": "{\"LC1\": \"images/HB_01_v6_0_0_LC1_20261027023325.png\", \"LC2\": \"images/HB_01_v6_0_0_LC2_20261027023325.png\", \"LC3\": \"images/HB_01_v6_0_0_LC3_20261027023325.png\", \"LC4\": \"images/HB_01_v6_0_0_LC4_20261027023325.png\", \"LC5\": \"images/HB_01_v6_0_0_LC5_20261027023325.png\", \"LC6\": \"images/HB_01_v6_0_0_LC6_20261027023325.png\", \"LC7\": \"images/HB_01_v6_0_0_LC7_20261027023325.png\"}",
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_01",
+    "Version": "6.1",
+    "Date": "2026-10-27 18:05:39",
+    "Weight (g)": 974.96,
+    "Description": "Major design change",
+    "Specifications": "Transmission: v5.0\nBodies: 1",
+    "Image Path": "images/UP_01_v6_1_20261027180607_sch.png",
+    "Stiffness Data": "{\"LC1\":0.1536,\"LC2\":0.2213,\"LC3\":0.2832,\"LC4\":0.2102,\"LC5\":0.1842,\"LC6\":0.247,\"LC7\":0.2745,\"LC8\":0.0687,\"LC9\":0.0687}",
+    "LC Images": "{\"LC1\":\"images/UP_01_v6_1_LC1_20261027180539.png\",\"LC2\":\"images/UP_01_v6_1_LC2_20261027180539.png\",\"LC3\":\"images/UP_01_v6_1_LC3_20261027180539.png\",\"LC8\":\"images/UP_01_v6_1_LC8_20261027180539.png\",\"LC9\":\"images/UP_01_v6_1_LC9_20261027180539.png\",\"LC4\":\"images/UP_01_v6_1_LC4_20261027180539.png\",\"LC5\":\"images/UP_01_v6_1_LC5_20261027180539.png\",\"LC6\":\"images/UP_01_v6_1_LC6_20261027180539.png\",\"LC7\":\"images/UP_01_v6_1_LC7_20261027180539.png\"}",
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
