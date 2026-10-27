@@ -768,5 +768,19 @@
     "LC Images": "{\"LC1\":\"images/UP_01_v6_1_LC1_20261027180600.png\",\"LC2\":\"images/UP_01_v6_1_LC2_20261027180600.png\",\"LC3\":\"images/UP_01_v6_1_LC3_20261027180600.png\",\"LC8\":\"images/UP_01_v6_1_LC8_20261027180600.png\",\"LC9\":\"images/UP_01_v6_1_LC9_20261027180600.png\",\"LC4\":\"images/UP_01_v6_1_LC4_20261027180600.png\",\"LC5\":\"images/UP_01_v6_1_LC5_20261027180600.png\",\"LC6\":\"images/UP_01_v6_1_LC6_20261027180600.png\",\"LC7\":\"images/UP_01_v6_1_LC7_20261027180600.png\"}",
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "HB",
+    "Part Name": "HB_01",
+    "Version": "6.0.1",
+    "Date": "2026-10-27 18:47:43",
+    "Weight (g)": 715.68,
+    "Description": "Majotr Design Changes on the external design",
+    "Specifications": "",
+    "Image Path": "images/HB_01_v6_0_1_20261027184756_sch.png",
+    "Stiffness Data": "{\"LC1\":0.0249,\"LC2\":0.0223,\"LC3\":0.25434,\"LC4\":0.18666,\"LC5\":0.15404,\"LC6\":0.06377,\"LC7\":0.08349,\"LC8\":0.05762,\"LC9\":0.05762}",
+    "LC Images": "{\"LC1\":\"images/HB_01_v6_0_0_LC1_20261027023325.png\",\"LC2\":\"images/HB_01_v6_0_0_LC2_20261027023325.png\",\"LC3\":\"images/HB_01_v6_0_1_LC3_20261027184743.png\",\"LC4\":\"images/HB_01_v6_0_1_LC4_20261027184743.png\",\"LC5\":\"images/HB_01_v6_0_1_LC5_20261027184743.png\",\"LC6\":\"images/HB_01_v6_0_0_LC6_20261027023325.png\",\"LC7\":\"images/HB_01_v6_0_0_LC7_20261027023325.png\",\"LC8\":\"images/HB_01_v6_0_1_LC8_20261027184743.png\",\"LC9\":\"images/HB_01_v6_0_1_LC9_20261027184743.png\"}",
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
