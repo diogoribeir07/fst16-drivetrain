@@ -220,20 +220,54 @@
           console.log("OCR Recognized Text:\n", text);
 
           // Match Load Case keywords
-          const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-          const firstLines = lines.slice(0, 5).join(" ").toLowerCase();
+          const cleanText = text.replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
+          const lines = cleanText.split("\n").map(l => l.trim()).filter(Boolean);
+          const firstLines = lines.slice(0, 8).join(" ").toLowerCase();
           const nospace = firstLines.replace(/[\s_]/g, "");
 
           let detectedLc = null;
 
-          // 1. Direct explicit LC tag (e.g. "LC5" or "Load Case 5")
-          const mDirect = firstLines.match(/\b(?:lc|load\s*case)\s*([1-9])\b/);
+          // 1. Direct explicit LC tag (e.g. "LC5", "LoadCase8", "Load Case 9")
+          const mDirect = firstLines.match(/\b(?:lc|load\s*case)\s*([1-9])\b/i);
           if (mDirect) {
             const num = parseInt(mDirect[1], 10);
             detectedLc = `LC${num}`;
           }
 
-          // 2. Pure modes
+          // 2. Unit Lateral Load Cases (LC8: 1kN Fy, LC9: -1kN Fy)
+          if (!detectedLc) {
+            const isNeg = /(?:^|\s)-+\s*(?:1|1\.0|i)\s*k?n\b/i.test(firstLines) ||
+                          /(?:^|\s)-+\s*fy\b/i.test(firstLines) ||
+                          nospace.includes("-1kn") ||
+                          nospace.includes("-ikn") ||
+                          nospace.includes("-1.0kn") ||
+                          nospace.includes("loadcase9") ||
+                          nospace.includes("lc9") ||
+                          nospace.includes("result2") ||
+                          nospace.includes("res2") ||
+                          nospace.includes("-fy") ||
+                          nospace.includes("-1knfy");
+
+            const isPos = /(?:^|[^\-])\b(?:1|1\.0|i)\s*k?n\b/i.test(firstLines) ||
+                          /(?:^|[^\-])\bfy\b/i.test(firstLines) ||
+                          nospace.includes("1kn") ||
+                          nospace.includes("ikn") ||
+                          nospace.includes("1.0kn") ||
+                          nospace.includes("loadcase8") ||
+                          nospace.includes("lc8") ||
+                          nospace.includes("result1") ||
+                          nospace.includes("res1") ||
+                          nospace.includes("1knfy") ||
+                          nospace.includes("+fy");
+
+            if (isNeg) {
+              detectedLc = "LC9";
+            } else if (isPos) {
+              detectedLc = "LC8";
+            }
+          }
+
+          // 3. Pure modes (LC1, LC2, LC3)
           if (!detectedLc) {
             if (firstLines.includes("pure") && firstLines.includes("brak")) {
               detectedLc = "LC1";
@@ -244,9 +278,10 @@
             }
           }
 
-          // 3. Braking + Cornering (LC4 vs LC5)
+          // 4. Braking + Cornering (LC4 vs LC5)
           if (!detectedLc) {
-            const isBc = (firstLines.includes("brak") && (firstLines.includes("corn") || firstLines.includes("com"))) || nospace.includes("b+c") || nospace.includes("bc");
+            const isBc = (firstLines.includes("brak") && (firstLines.includes("corn") || firstLines.includes("com"))) ||
+                         nospace.includes("b+c") || /\bb\+c\b|\bb\s*\+\s*c\b/i.test(firstLines);
             if (isBc) {
               const has2 = /(?:cornering|comering|b\+c|bc)\s*[\(:[\]\-]*(?:[2\?zZ]|two|case\s*5)/i.test(firstLines) ||
                            nospace.includes("cornering2") || nospace.includes("cornering?") || nospace.includes("corneringz") ||
@@ -266,14 +301,12 @@
                 let titleLine = "";
                 for (const l of lines.slice(0, 5)) {
                   const ll = l.toLowerCase();
-                  if (ll.includes("brak") || ll.includes("b+c") || ll.includes("bc") || ll.includes("corn")) {
+                  if (ll.includes("brak") || ll.includes("b+c") || ll.includes("corn")) {
                     titleLine += " " + ll;
                   }
                 }
                 if (/[2\?zZ]|\(2\)/i.test(titleLine)) {
                   detectedLc = "LC5";
-                } else if (/[1l\|!iI]|\(1\)/i.test(titleLine)) {
-                  detectedLc = "LC4";
                 } else {
                   detectedLc = "LC4";
                 }
@@ -281,16 +314,17 @@
             }
           }
 
-          // 4. Acceleration + Cornering (LC6 vs LC7)
+          // 5. Acceleration + Cornering (LC6 vs LC7)
           if (!detectedLc) {
-            const isAc = (firstLines.includes("acc") && (firstLines.includes("corn") || firstLines.includes("com"))) || nospace.includes("a+c") || nospace.includes("ac");
+            const isAc = (firstLines.includes("acc") && (firstLines.includes("corn") || firstLines.includes("com"))) ||
+                         nospace.includes("a+c") || /\ba\+c\b|\ba\s*\+\s*c\b/i.test(firstLines);
             if (isAc) {
-              const has2 = /(?:cornering|comering|a\+c|ac)\s*[\(:[\]\-]*(?:[2\?zZ]|two|case\s*7)/i.test(firstLines) ||
+              const has2 = /(?:cornering|comering|a\+c)\s*[\(:[\]\-]*(?:[2\?zZ]|two|case\s*7)/i.test(firstLines) ||
                            nospace.includes("cornering2") || nospace.includes("cornering?") || nospace.includes("corneringz") ||
                            nospace.includes("comering2") || nospace.includes("comering?") ||
                            nospace.includes("ac2") || nospace.includes("a+c2") || nospace.includes("case7") || nospace.includes("lc7");
 
-              const has1 = /(?:cornering|comering|a\+c|ac)\s*[\(:[\]\-]*(?:[1l\|!iI]|one|case\s*6)/i.test(firstLines) ||
+              const has1 = /(?:cornering|comering|a\+c)\s*[\(:[\]\-]*(?:[1l\|!iI]|one|case\s*6)/i.test(firstLines) ||
                            nospace.includes("cornering1") || nospace.includes("corneringl") || nospace.includes("cornering|") ||
                            nospace.includes("comering1") || nospace.includes("comeringl") ||
                            nospace.includes("ac1") || nospace.includes("a+c1") || nospace.includes("case6") || nospace.includes("lc6");
@@ -303,14 +337,12 @@
                 let titleLine = "";
                 for (const l of lines.slice(0, 5)) {
                   const ll = l.toLowerCase();
-                  if (ll.includes("acc") || ll.includes("a+c") || ll.includes("ac") || ll.includes("corn")) {
+                  if (ll.includes("acc") || ll.includes("a+c") || ll.includes("corn")) {
                     titleLine += " " + ll;
                   }
                 }
                 if (/[2\?zZ]|\(2\)/i.test(titleLine)) {
                   detectedLc = "LC7";
-                } else if (/[1l\|!iI]|\(1\)/i.test(titleLine)) {
-                  detectedLc = "LC6";
                 } else {
                   detectedLc = "LC6";
                 }
@@ -318,20 +350,11 @@
             }
           }
 
-          // 5. LC8 / LC9 (for UP_01 and HB_01)
-          if (!detectedLc) {
-            if (nospace.includes("-1kn") || nospace.includes("-ikn") || nospace.includes("loadcase9") || nospace.includes("lc9") || nospace.includes("result2") || nospace.includes("res2") || nospace.includes("-1.0kn")) {
-              detectedLc = "LC9";
-            } else if (nospace.includes("1kn") || nospace.includes("ikn") || nospace.includes("loadcase8") || nospace.includes("lc8") || nospace.includes("result1") || nospace.includes("res1") || nospace.includes("1.0kn")) {
-              detectedLc = "LC8";
-            }
-          }
-
           // Extract scientific notation or decimal displacement numbers
           const nums = [];
           const sciRegex = /([1-9])[.\-]?(\d{3,5})\s*(?:e\s*[\-+]|[\+&]|\s*-\s*)0([0-4])/gi;
           let match;
-          while ((match = sciRegex.exec(text)) !== null) {
+          while ((match = sciRegex.exec(cleanText)) !== null) {
             const mant = parseFloat(match[1] + "." + match[2]);
             const exp = parseInt(match[3], 10);
             nums.push(mant * Math.pow(10, -exp));
@@ -339,11 +362,10 @@
 
           if (!nums.length) {
             const decRegex = /\b0\.(\d{3,5})\b/g;
-            while ((match = decRegex.exec(text)) !== null) {
+            while ((match = decRegex.exec(cleanText)) !== null) {
               nums.push(parseFloat(match[0]));
             }
           }
-
           let detectedDisp = null;
           const isHB = targetPart === "HB_01";
           const partDecimals = isHB ? 5 : 4;
