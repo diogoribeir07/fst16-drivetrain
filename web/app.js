@@ -779,6 +779,10 @@
           <span>Requirements</span>
           <span class="tag">${requirementsData.length}</span>
         </div>
+        <div class="nav-item ${currentView === "changelog" ? "active" : ""}" data-view="changelog">
+          <span>ChangeLog</span>
+          <span class="tag">Timeline</span>
+        </div>
         <div class="nav-item" id="btnExportExcel">
           <span>Export Excel</span>
           <span class="tag">.xlsx</span>
@@ -905,6 +909,9 @@
     } else if (currentView === "requirements") {
       currentPartName = null;
       renderRequirementsView();
+    } else if (currentView === "changelog") {
+      currentPartName = null;
+      renderChangelogView();
     } else if (currentView === "trash") {
       currentPartName = null;
       renderTrashView();
@@ -1346,8 +1353,257 @@
     `;
   }
 
-  // 3. Recycle Bin View
+  // 3. ChangeLog View
+  let changelogSub = "ALL";
+  let changelogQuery = "";
+  let changelogPartFilter = "ALL";
+
+  function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  window.navigateToPart = function (partName) {
+    currentView = partName;
+    activePartTab = "tabOverview";
+    buildSidebar();
+    renderPartView(partName);
+  };
+
+  window.navigateToPartFea = function (partName, ver) {
+    currentView = partName;
+    selectedEvalVersion = ver;
+    activePartTab = "tabFea";
+    buildSidebar();
+    renderPartView(partName);
+  };
+
+  window.navigateToPartOverview = function (partName, ver) {
+    currentView = partName;
+    selectedEvalVersion = ver;
+    activePartTab = "tabOverview";
+    buildSidebar();
+    renderPartView(partName);
+  };
+
+  window.setChangelogSub = function (sub) {
+    changelogSub = sub;
+    changelogPartFilter = "ALL";
+    renderChangelogView();
+  };
+
+  window.setChangelogPart = function (part) {
+    changelogPartFilter = part;
+    renderChangelogView();
+  };
+
+  window.handleChangelogSearch = function (e) {
+    changelogQuery = (e.target.value || "").trim().toLowerCase();
+    renderChangelogView();
+  };
+
+  function renderChangelogView() {
+    const partsBySub = {};
+    const allUniqueParts = [];
+    const seenParts = new Set();
+
+    partsData.forEach((p) => {
+      const sub = p.Subassembly || "Other";
+      if (!partsBySub[sub]) partsBySub[sub] = [];
+      const pName = p["Part Name"];
+      if (!seenParts.has(pName)) {
+        seenParts.add(pName);
+        partsBySub[sub].push(pName);
+        allUniqueParts.push({ name: pName, sub: sub });
+      }
+    });
+
+    const subOrder = ["UP", "HB", "GB", "Other"];
+    const allSubs = Array.from(new Set([...subOrder, ...Object.keys(partsBySub)]));
+
+    let targetParts = allUniqueParts;
+    if (changelogSub !== "ALL") {
+      targetParts = targetParts.filter((p) => p.sub === changelogSub);
+    }
+    if (changelogPartFilter !== "ALL") {
+      targetParts = targetParts.filter((p) => p.name === changelogPartFilter);
+    }
+
+    let html = `
+      <div class="page-header">
+        <div>
+          <h2>ChangeLog</h2>
+          <div class="page-subtitle">Version History</div>
+        </div>
+      </div>
+
+      <div class="changelog-container">
+        <div class="changelog-controls">
+          <div class="changelog-filter-group">
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim); margin-right: 0.25rem;">Subassembly:</span>
+            <button class="changelog-pill ${changelogSub === "ALL" ? "active" : ""}" onclick="window.setChangelogSub('ALL')">All</button>
+            ${allSubs.map((s) => `
+              <button class="changelog-pill ${changelogSub === s ? "active" : ""}" onclick="window.setChangelogSub('${s}')">${s}</button>
+            `).join("")}
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex: 1; justify-content: flex-end;">
+            <select class="form-input" style="width: auto; max-width: 160px; font-size: 0.8rem;" onchange="window.setChangelogPart(this.value)">
+              <option value="ALL" ${changelogPartFilter === "ALL" ? "selected" : ""}>All Parts</option>
+              ${allUniqueParts.filter(p => changelogSub === "ALL" || p.sub === changelogSub).map(p => `
+                <option value="${p.name}" ${changelogPartFilter === p.name ? "selected" : ""}>${p.name}</option>
+              `).join("")}
+            </select>
+
+            <div class="changelog-search-box">
+              <input type="text"
+                     id="changelogSearchInput"
+                     placeholder="Search versions..."
+                     value="${escapeHtml(changelogQuery)}"
+                     oninput="window.handleChangelogSearch(event)" />
+            </div>
+          </div>
+        </div>
+    `;
+
+    let renderedCount = 0;
+
+    targetParts.forEach(({ name: partName, sub }) => {
+      const iters = partsData.filter((p) => p["Part Name"] === partName);
+      if (!iters.length) return;
+
+      const chronological = [...iters].sort((a, b) => (a.Date || "").localeCompare(b.Date || ""));
+      const deltaMap = new Map();
+      for (let i = 0; i < chronological.length; i++) {
+        const cur = chronological[i];
+        const curW = parseFloat(cur["Weight (g)"]) || 0;
+        if (i === 0) {
+          deltaMap.set(String(cur.Version), { delta: null, label: "Baseline" });
+        } else {
+          const prevW = parseFloat(chronological[i - 1]["Weight (g)"]) || 0;
+          const d = curW - prevW;
+          const dStr = (d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1)) + " g";
+          deltaMap.set(String(cur.Version), { delta: d, label: dStr });
+        }
+      }
+
+      let displayIters = [...chronological].reverse();
+
+      if (changelogQuery) {
+        displayIters = displayIters.filter((p) => {
+          const v = String(p.Version || "").toLowerCase();
+          const d = String(p.Description || "").toLowerCase();
+          const j = String(p.Justification || "").toLowerCase();
+          const pn = String(p["Part Name"] || "").toLowerCase();
+          return v.includes(changelogQuery) || d.includes(changelogQuery) || j.includes(changelogQuery) || pn.includes(changelogQuery);
+        });
+      }
+
+      if (!displayIters.length) return;
+      renderedCount++;
+
+      html += `
+        <div class="changelog-part-group">
+          <div class="changelog-part-header">
+            <div class="changelog-part-title">
+              <h3>${escapeHtml(partName)}</h3>
+              <span class="badge badge-outline">${escapeHtml(sub)}</span>
+              <span class="tag">${displayIters.length} Versions</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="window.navigateToPart('${partName}')">Open Part</button>
+          </div>
+
+          <div class="changelog-timeline">
+            ${displayIters.map((p) => {
+              const vStr = String(p.Version);
+              const dInfo = deltaMap.get(vStr) || { delta: null, label: "Baseline" };
+              const w = parseFloat(p["Weight (g)"]) || 0;
+
+              let deltaBadge = `<span class="badge badge-dim">${dInfo.label}</span>`;
+              if (dInfo.delta !== null) {
+                if (dInfo.delta < 0) {
+                  deltaBadge = `<span class="badge badge-delta-green">${dInfo.label}</span>`;
+                } else if (dInfo.delta > 0) {
+                  deltaBadge = `<span class="badge badge-delta-red">${dInfo.label}</span>`;
+                } else {
+                  deltaBadge = `<span class="badge badge-dim">0.0 g</span>`;
+                }
+              }
+
+              return `
+                <div class="changelog-entry">
+                  <div class="changelog-dot"></div>
+                  <div class="changelog-card">
+                    <div class="changelog-top">
+                      <div class="changelog-version-info">
+                        <span class="badge badge-accent">v${escapeHtml(p.Version)}</span>
+                        <span class="changelog-date">${p.Date ? escapeHtml(p.Date) : "No date"}</span>
+                      </div>
+                      <div class="changelog-metrics">
+                        <span class="badge badge-outline">${w.toFixed(1)} g</span>
+                        ${deltaBadge}
+                      </div>
+                    </div>
+
+                    <div class="changelog-desc">
+                      ${p.Description ? escapeHtml(p.Description).replace(/\n/g, "<br>") : '<span class="text-dim">No description provided.</span>'}
+                    </div>
+
+                    ${p.Justification ? `
+                      <div class="changelog-just">
+                        <strong>Justification:</strong> ${escapeHtml(p.Justification)}
+                      </div>
+                    ` : ""}
+
+                    ${p["Image Path"] ? `
+                      <div class="changelog-schematic">
+                        <img src="${formatImageSrc(p['Image Path'])}"
+                             alt="${escapeHtml(partName)} v${escapeHtml(p.Version)}"
+                             class="changelog-thumb"
+                             onclick="window.openLightbox('${formatImageSrc(p['Image Path'])}')"
+                             onerror="window.handleImageFallback(this)" />
+                      </div>
+                    ` : ""}
+
+                    <div class="changelog-actions">
+                      <button class="btn btn-secondary btn-sm" onclick="window.navigateToPartFea('${partName}', '${escapeHtml(p.Version)}')">Compare FEA</button>
+                      <button class="btn btn-secondary btn-sm" onclick="window.navigateToPartOverview('${partName}', '${escapeHtml(p.Version)}')">View Overview</button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    });
+
+    if (renderedCount === 0) {
+      html += `
+        <div style="padding: 3rem; text-align: center; color: var(--text-dim); background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          No matching version logs found.
+        </div>
+      `;
+    }
+
+    html += `</div>`;
+    elContentArea.innerHTML = html;
+
+    const searchInp = document.getElementById("changelogSearchInput");
+    if (searchInp && changelogQuery) {
+      searchInp.focus();
+      searchInp.selectionStart = searchInp.selectionEnd = searchInp.value.length;
+    }
+  }
+
+  // 4. Recycle Bin View
   function renderTrashView() {
+
     let html = `
       <div class="page-header">
         <div>
@@ -2275,7 +2531,29 @@
         try {
           if (latest["LC Images"]) finalLcImages = JSON.parse(latest["LC Images"]);
         } catch (e) {}
-        Object.assign(finalLcImages, newIterLcImages);
+
+        const vClean = formatVersion(v).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+
+        for (const [lc, imgVal] of Object.entries(newIterLcImages)) {
+          if (typeof imgVal === "string" && imgVal.startsWith("data:image")) {
+            const filename = `images/${partName}_${vClean}_${lc}_${timestamp}.png`;
+            localImageCache.set(filename, imgVal);
+            if (window.DTCloud && window.DTCloud.isConfigured()) {
+              try {
+                await window.DTCloud.commitBinaryFile(filename, imgVal, `Upload ${filename}`);
+                finalLcImages[lc] = filename;
+              } catch (err) {
+                console.warn(`Failed to upload binary LC image for ${lc}:`, err);
+                finalLcImages[lc] = imgVal;
+              }
+            } else {
+              finalLcImages[lc] = imgVal;
+            }
+          } else if (imgVal) {
+            finalLcImages[lc] = imgVal;
+          }
+        }
 
         let stagedImagePath = latest["Image Path"] || null;
         if (newIterSchematic) {
@@ -2372,8 +2650,49 @@
           try {
             if (row["LC Images"]) curLc = JSON.parse(row["LC Images"]);
           } catch (e) {}
-          Object.assign(curLc, editIterLcImages);
+
+          const vClean = formatVersion(targetVer).replace(/[^a-zA-Z0-9_-]/g, "_");
+          const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+
+          for (const [lc, imgVal] of Object.entries(editIterLcImages)) {
+            if (typeof imgVal === "string" && imgVal.startsWith("data:image")) {
+              const filename = `images/${partName}_${vClean}_${lc}_${timestamp}.png`;
+              localImageCache.set(filename, imgVal);
+              if (window.DTCloud && window.DTCloud.isConfigured()) {
+                try {
+                  await window.DTCloud.commitBinaryFile(filename, imgVal, `Upload ${filename}`);
+                  curLc[lc] = filename;
+                } catch (err) {
+                  console.warn(`Failed to upload binary LC image for ${lc}:`, err);
+                  curLc[lc] = imgVal;
+                }
+              } else {
+                curLc[lc] = imgVal;
+              }
+            } else if (imgVal) {
+              curLc[lc] = imgVal;
+            }
+          }
           row["LC Images"] = JSON.stringify(curLc);
+        }
+
+        if (editIterSchematic) {
+          const vClean = formatVersion(targetVer).replace(/[^a-zA-Z0-9_-]/g, "_");
+          const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+          const filename = `images/${partName}_${vClean}_${timestamp}_sch.png`;
+          localImageCache.set(filename, editIterSchematic);
+          if (window.DTCloud && window.DTCloud.isConfigured()) {
+            try {
+              await window.DTCloud.commitBinaryFile(filename, editIterSchematic, `Upload ${filename}`);
+              row["Image Path"] = filename;
+            } catch (err) {
+              console.warn("Failed to upload edit binary schematic:", err);
+              row["Image Path"] = editIterSchematic;
+            }
+          } else {
+            row["Image Path"] = editIterSchematic;
+          }
+          editIterSchematic = null;
         }
 
         try {
@@ -2391,7 +2710,7 @@
 
   // Global paste listener for FEA Screenshot OCR
   window.addEventListener("paste", async (e) => {
-    if (!currentView || currentView === "assembly" || currentView === "requirements" || currentView === "trash") {
+    if (!currentView || currentView === "assembly" || currentView === "requirements" || currentView === "changelog" || currentView === "trash") {
       return;
     }
     if (!isEditor()) return;
