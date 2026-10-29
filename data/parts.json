@@ -835,7 +835,7 @@
     "Specifications": "",
     "Image Path": "[\"images/HB_01_v6_2_1_20261029023340_sch.png\",\"images/HB_01_v6_2_1_20261029024033_1.png\"]",
     "Stiffness Data": "{\"LC1\":0.03212,\"LC2\":0.02511,\"LC3\":0.10572,\"LC4\":0.06487,\"LC5\":0.06446,\"LC6\":0.05633,\"LC7\":0.07286,\"LC8\":0.02394,\"LC9\":0.02394}",
-    "LC Images": "{\"LC1\":\"images/HB_01_v6_2_1_LC1_20261029024254.png\",\"LC2\":\"images/HB_01_v6_2_1_LC2_20261029024254.png\",\"LC3\":\"images/HB_01_v6_2_1_LC3_20261029023337.png\",\"LC4\":\"images/HB_01_v6_2_1_LC4_20261029024254.png\",\"LC5\":\"images/HB_01_v6_2_1_LC5_20261029024254.png\",\"LC6\":\"images/HB_01_v6_2_1_LC6_20261029024254.png\",\"LC7\":\"images/HB_01_v6_2_1_LC7_20261029024254.png\",\"LC8\":\"images/HB_01_v6_2_1_LC8_20261029024254.png\",\"LC9\":\"images/HB_01_v6_2_1_LC9_20261029024254.png\"}",
+    "LC Images": "{\"LC1\":\"images/HB_01_v6_2_1_LC1_20261029024315.png\",\"LC2\":\"images/HB_01_v6_2_1_LC2_20261029024315.png\",\"LC3\":\"images/HB_01_v6_2_1_LC3_20261029023337.png\",\"LC4\":\"images/HB_01_v6_2_1_LC4_20261029024315.png\",\"LC5\":\"images/HB_01_v6_2_1_LC5_20261029024315.png\",\"LC6\":\"images/HB_01_v6_2_1_LC6_20261029024315.png\",\"LC7\":\"images/HB_01_v6_2_1_LC7_20261029024315.png\",\"LC8\":\"images/HB_01_v6_2_1_LC8_20261029024315.png\",\"LC9\":\"images/HB_01_v6_2_1_LC9_20261029024315.png\"}",
     "Tolerancing Data": null,
     "Justification": null
   }
