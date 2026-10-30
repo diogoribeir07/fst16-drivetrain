@@ -64,7 +64,7 @@
     "Description": "nTop Analysis on FST15 model to create a baseline",
     "Specifications": "",
     "Image Path": "images/HB_01_FST15_20261025092325_1.png",
-    "Stiffness Data": "{\"LC1\":0.02295,\"LC2\":0.01838,\"LC3\":0.15131,\"LC4\":0.11793,\"LC5\":0.09681,\"LC6\":0.08385,\"LC7\":0.10998,\"LC8\":0.0337,\"LC9\":0.0372}",
+    "Stiffness Data": "{\"LC1\":0.02295,\"LC2\":0.01838,\"LC3\":0.15131,\"LC4\":0.11793,\"LC5\":0.09681,\"LC6\":0.08385,\"LC7\":0.10998,\"LC8\":0.0372,\"LC9\":0.0372}",
     "LC Images": "{\"LC1\": \"images/HB_01_vFST15_LC1_20261006111814.png\", \"LC2\": \"images/HB_01_vFST15_LC2_20261006111814.png\", \"LC3\": \"images/HB_01_vFST15_LC3_20261006111814.png\", \"LC4\": \"images/HB_01_vFST15_LC4_20261006111814.png\", \"LC6\": \"images/HB_01_vFST15_LC6_20261006111814.png\", \"LC7\": \"images/HB_01_vFST15_LC7_20261006111814.png\"}",
     "Tolerancing Data": null,
     "Justification": null
