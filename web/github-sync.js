@@ -259,6 +259,103 @@
     return await putRes.json();
   }
 
+  async function commitBatch(fileEntries, commitMessage, onProgress) {
+    const cfg = getConfig();
+    if (!cfg.token || !cfg.repo) {
+      throw new Error("GitHub Token not configured. Please enter access token in Cloud Settings.");
+    }
+    if (!fileEntries || !fileEntries.length) return null;
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept": "application/vnd.github.v3+json",
+      "Authorization": `token ${cfg.token}`
+    };
+    const baseUrl = `https://api.github.com/repos/${cfg.repo}`;
+
+    try {
+      if (onProgress) onProgress(`Syncing (${fileEntries.length} files)...`);
+      const refRes = await fetch(`${baseUrl}/git/ref/heads/${encodeURIComponent(cfg.branch)}?_cb=${Date.now()}`, { headers });
+      if (!refRes.ok) throw new Error(`Ref fetch failed (${refRes.status})`);
+      const refData = await refRes.json();
+      const latestCommitSha = refData.object.sha;
+
+      const commitRes = await fetch(`${baseUrl}/git/commits/${latestCommitSha}`, { headers });
+      if (!commitRes.ok) throw new Error(`Commit fetch failed (${commitRes.status})`);
+      const commitData = await commitRes.json();
+      const baseTreeSha = commitData.tree.sha;
+
+      let completed = 0;
+      const treeItems = await Promise.all(fileEntries.map(async (entry) => {
+        const cleanPath = entry.path.startsWith("/") ? entry.path.slice(1) : entry.path;
+        let contentB64 = "";
+        if (entry.json !== undefined) {
+          contentB64 = utf8ToBase64(JSON.stringify(entry.json, null, 2));
+        } else if (entry.base64) {
+          const raw = entry.base64.includes(",") ? entry.base64.split(",")[1] : entry.base64;
+          contentB64 = raw.replace(/\s/g, "");
+        }
+        const blobRes = await fetch(`${baseUrl}/git/blobs`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ content: contentB64, encoding: "base64" })
+        });
+        if (!blobRes.ok) throw new Error(`Blob creation failed for ${cleanPath} (${blobRes.status})`);
+        const blobData = await blobRes.json();
+        completed++;
+        if (onProgress) onProgress(`Uploading (${completed}/${fileEntries.length})...`);
+        return {
+          path: cleanPath,
+          mode: "100644",
+          type: "blob",
+          sha: blobData.sha
+        };
+      }));
+
+      if (onProgress) onProgress("Finalizing commit...");
+      const treeRes = await fetch(`${baseUrl}/git/trees`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+      });
+      if (!treeRes.ok) throw new Error(`Tree creation failed (${treeRes.status})`);
+      const treeData = await treeRes.json();
+
+      const newCommitRes = await fetch(`${baseUrl}/git/commits`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          message: commitMessage || "Batch update via web portal",
+          tree: treeData.sha,
+          parents: [latestCommitSha]
+        })
+      });
+      if (!newCommitRes.ok) throw new Error(`Commit creation failed (${newCommitRes.status})`);
+      const newCommitData = await newCommitRes.json();
+
+      const updateRefRes = await fetch(`${baseUrl}/git/refs/heads/${encodeURIComponent(cfg.branch)}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ sha: newCommitData.sha, force: false })
+      });
+      if (!updateRefRes.ok) throw new Error(`Ref update failed (${updateRefRes.status})`);
+      return await updateRefRes.json();
+    } catch (batchErr) {
+      console.warn("Batch commit failed, falling back to sequential commits:", batchErr);
+      let idx = 0;
+      for (const entry of fileEntries) {
+        idx++;
+        if (onProgress) onProgress(`Saving (${idx}/${fileEntries.length})...`);
+        if (entry.json !== undefined) {
+          await commitFile(entry.path, entry.json, commitMessage);
+        } else if (entry.base64) {
+          await commitBinaryFile(entry.path, entry.base64, `Upload ${entry.path}`);
+        }
+      }
+      return { fallback: true };
+    }
+  }
+
   root.DTCloud = {
     getConfig,
     saveConfig,
@@ -266,6 +363,7 @@
     isConfigured,
     fetchFile,
     commitFile,
-    commitBinaryFile
+    commitBinaryFile,
+    commitBatch
   };
 })(window);

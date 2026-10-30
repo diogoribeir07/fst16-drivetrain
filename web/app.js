@@ -25,8 +25,14 @@
   let activePartTab = "tabOverview";
   let newIterLcImages = {};
   let editIterLcImages = {};
-  let newIterSchematic = null;
-  let editIterSchematic = null;
+  let newIterSchematics = [];
+  let editIterSchematics = null;
+  let editStagedPartVer = null;
+  let activePasteTarget = "fea"; // 'fea' or 'schematic'
+  let feaCompareMode = "side"; // 'side' or 'flip'
+  let feaFlipShowRef = false;
+  let hasUnsavedChanges = false;
+  let newIterDraft = { part: null, weight: "", desc: "", specs: "", stiff: {} };
 
   // DOM Elements
   const elSidebarNav = document.getElementById("sidebarNav");
@@ -34,6 +40,23 @@
   const elUserRoleBar = document.getElementById("userRoleBar");
   const elBtnOpenSync = document.getElementById("btnOpenSync");
   const elModalContainer = document.getElementById("modalContainer");
+
+  window.toggleMobileSidebar = function (forceState) {
+    const sb = document.querySelector(".sidebar");
+    const bd = document.getElementById("sidebarBackdrop");
+    if (!sb) return;
+    const isOpen = forceState !== undefined ? forceState : !sb.classList.contains("open");
+    sb.classList.toggle("open", isOpen);
+    if (bd) bd.classList.toggle("open", isOpen);
+  };
+
+  window.markUnsaved = function (state = true) {
+    hasUnsavedChanges = state;
+    ["btnSaveNewIterInline", "btnSaveEditIterInline"].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.classList.toggle("unsaved-pulse", state);
+    });
+  };
 
   // Helper: Two-tier permissions
   function isEditor() {
@@ -430,20 +453,25 @@
     const partDecimals = isHB ? 5 : 4;
 
     if (res.detectedLc && res.detectedDisp !== null) {
+      const formattedVal = res.detectedDisp.toFixed(partDecimals);
       const inpId = mode === "new" ? `newLC_${res.detectedLc}` : `editLC_${res.detectedLc}`;
       const inp = document.getElementById(inpId);
       if (inp) {
-        inp.value = res.detectedDisp.toFixed(partDecimals);
+        inp.value = formattedVal;
+        inp.style.transition = "border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease";
         inp.style.borderColor = "var(--delta-green)";
-        inp.style.backgroundColor = "rgba(34, 197, 94, 0.1)";
+        inp.style.backgroundColor = "rgba(34, 197, 94, 0.14)";
+        inp.style.boxShadow = "0 0 0 2px rgba(34, 197, 94, 0.22)";
         setTimeout(() => {
           inp.style.borderColor = "";
           inp.style.backgroundColor = "";
+          inp.style.boxShadow = "";
         }, 1800);
       }
 
       if (mode === "new") {
         newIterLcImages[res.detectedLc] = res.fullImage;
+        newIterDraft.stiff[res.detectedLc] = formattedVal;
       } else {
         editIterLcImages[res.detectedLc] = res.fullImage;
       }
@@ -451,37 +479,17 @@
       const badgeId = `${mode}_badge_${res.detectedLc}`;
       const badge = document.getElementById(badgeId);
       if (badge) {
-        badge.style.display = "inline-block";
+        badge.style.display = "inline-flex";
+        badge.setAttribute("data-imgsrc", res.fullImage);
         badge.textContent = "Attached";
       }
+      window.markUnsaved(true);
+      window.updateLiveFormTelemetry(targetPart, mode);
     } else if (res.detectedDisp !== null) {
       showToast(`Detected ${res.detectedDisp.toFixed(partDecimals)} mm. Enter into target LC.`);
     } else if (!res.detectedLc && res.fullImage) {
-      // Non-FEA image (e.g. CAD drawing or technical screenshot) -> Attach as CAD schematic!
-      showToast("Attaching image as CAD schematic...");
-      if (mode === "edit") {
-        const evalVer = selectedEvalVersion;
-        const row = partsData.find((p) => p["Part Name"] === targetPart && String(p.Version) === String(evalVer));
-        if (row) {
-          await uploadImagesToIteration([fileOrDataUrl], row, targetPart);
-          showToast("CAD schematic attached!");
-        } else {
-          showToast("Iteration record not found.");
-        }
-      } else {
-        newIterSchematic = res.fullImage;
-        const previewCont = document.getElementById("newSchematicPreview");
-        if (previewCont) {
-          previewCont.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.5rem;">
-              <img src="${res.fullImage}" style="max-height: 60px; border-radius: 4px;">
-              <span class="tag" style="color: var(--delta-green); border-color: var(--delta-green);">Staged</span>
-              <button type="button" class="btn-action danger" onclick="window.clearNewSchematic()">Remove</button>
-            </div>
-          `;
-        }
-        showToast("CAD schematic staged for new iteration!");
-      }
+      showToast("No FEA legend detected — staging as CAD schematic...");
+      await window.stageSchematicFiles([res.fullImage], mode);
     }
   }
 
@@ -604,78 +612,266 @@
     }
   };
 
-  // Direct paste schematic from system clipboard via Clipboard API
-  window.pasteSchematicFromClipboard = async function (targetPart, mode = "edit") {
-    if (!navigator.clipboard || !navigator.clipboard.read) {
-      showToast("Clipboard API unavailable. Please use Browse File.");
-      return;
+  window.setPasteTarget = function (target) {
+    activePasteTarget = target === "schematic" ? "schematic" : "fea";
+    document.querySelectorAll(".paste-zone-box").forEach((el) => {
+      const z = el.getAttribute("data-paste-zone");
+      el.classList.toggle("active-zone", z === activePasteTarget);
+    });
+  };
+
+  window.stageSchematicFiles = async function (filesOrUrls, mode = "new") {
+    if (!filesOrUrls || !filesOrUrls.length) return;
+    const targetArr = mode === "new" ? newIterSchematics : (editIterSchematics || []);
+    for (const item of filesOrUrls) {
+      const dataUrl = typeof item === "string" && item.startsWith("data:")
+        ? item
+        : await downscaleImage(item, 1920, 1080);
+      if (dataUrl) targetArr.push(dataUrl);
     }
-    try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        for (const type of item.types) {
-          if (type.startsWith("image/")) {
-            const blob = await item.getType(type);
-            if (mode === "edit") {
-              const evalVer = selectedEvalVersion;
-              const row = partsData.find((p) => p["Part Name"] === targetPart && String(p.Version) === String(evalVer));
-              if (row) {
-                await uploadImagesToIteration([blob], row, targetPart);
-                showToast("Schematic attached successfully!");
-              } else {
-                showToast("Iteration not found.");
-              }
-            } else {
-              const dataUrl = await downscaleImage(blob, 1920, 1080);
-              newIterSchematic = dataUrl;
-              const previewCont = document.getElementById("newSchematicPreview");
-              if (previewCont) {
-                previewCont.innerHTML = `
-                  <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.5rem;">
-                    <img src="${dataUrl}" style="max-height: 60px; border-radius: 4px;">
-                    <span class="tag" style="color: var(--delta-green); border-color: var(--delta-green);">Staged</span>
-                    <button type="button" class="btn-action danger" onclick="window.clearNewSchematic()">Remove</button>
-                  </div>
-                `;
-              }
-              showToast("Schematic staged for new iteration!");
-            }
-            return;
-          }
-        }
-      }
-      showToast("No image found on clipboard. Capture (Win+Shift+S) first.");
-    } catch (err) {
-      console.warn("Clipboard read error:", err);
-      showToast("Clipboard access denied. Please use Browse File.");
+    if (mode === "new") {
+      newIterSchematics = targetArr;
+    } else {
+      editIterSchematics = targetArr;
+    }
+    window.markUnsaved(true);
+    refreshStagedSchematicsDOM(mode);
+    showToast(`Staged ${filesOrUrls.length} schematic photo(s)`);
+  };
+
+  window.removeStagedSchematic = function (mode, idx) {
+    const targetArr = mode === "new" ? newIterSchematics : (editIterSchematics || []);
+    if (idx >= 0 && idx < targetArr.length) {
+      targetArr.splice(idx, 1);
+      window.markUnsaved(true);
+      refreshStagedSchematicsDOM(mode);
     }
   };
 
-  window.clearNewSchematic = function () {
-    newIterSchematic = null;
-    const previewCont = document.getElementById("newSchematicPreview");
-    if (previewCont) previewCont.innerHTML = "";
-  };
-
-  function renderSchematicThumbnails(evalRow, partName) {
-    const images = parseImagePaths(evalRow["Image Path"]);
-    if (!images.length) {
-      return '<p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">No CAD schematics currently attached.</p>';
+  function renderStagedSchematicsList(mode) {
+    const arr = mode === "new" ? newIterSchematics : (editIterSchematics || []);
+    if (!arr.length) {
+      return '<p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">No CAD schematics staged.</p>';
     }
     return `
       <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem;">
-        ${images.map((imgP, i) => {
+        ${arr.map((imgP, i) => {
           const src = formatImageSrc(imgP);
+          const isNewB64 = String(imgP).startsWith("data:");
           return `
-            <div style="position: relative; display: inline-block;">
-              <img src="${src}" data-rawpath="${imgP}" onerror="window.handleImageFallback(this, '${imgP}')" style="max-height: 75px; max-width: 130px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer;" onclick="window.openLightbox(this.src)">
-              <button type="button" style="position: absolute; top: -6px; right: -6px; background: var(--delta-red); color: #fff; border: 1px solid #fff; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="window.deleteGalleryImage('${partName}', '${evalRow.Version}', ${i})" title="Remove schematic">x</button>
+            <div style="position: relative; display: inline-block; background: var(--bg-sidebar); padding: 4px; border-radius: var(--radius-sm); border: 1px solid ${isNewB64 ? "var(--delta-green)" : "var(--border-color)"};">
+              <img src="${src}" data-rawpath="${imgP}" onerror="window.handleImageFallback(this, '${imgP}')" style="height: 72px; width: 115px; object-fit: cover; border-radius: 3px; cursor: pointer; display: block;" onclick="window.openLightbox(this.src)">
+              <span style="position: absolute; bottom: 6px; left: 6px; font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.78); color: ${isNewB64 ? "var(--delta-green)" : "var(--text-main)"};">#${i + 1}</span>
+              <button type="button" style="position: absolute; top: -6px; right: -6px; background: var(--delta-red); color: #fff; border: 1px solid var(--bg-card); border-radius: 50%; width: 20px; height: 20px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="window.removeStagedSchematic('${mode}', ${i})" title="Remove photo">x</button>
             </div>
           `;
         }).join("")}
       </div>
     `;
   }
+
+  function refreshStagedSchematicsDOM(mode) {
+    const cont = document.getElementById(mode === "new" ? "newSchematicPreview" : "editSchematicPreview");
+    if (cont) cont.innerHTML = renderStagedSchematicsList(mode);
+  }
+
+  window.pasteSchematicFromClipboard = async function (targetPart, mode = "edit") {
+    window.setPasteTarget("schematic");
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      showToast("Press Ctrl+V directly to paste without popup.");
+      return;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      const blobs = [];
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith("image/")) {
+            blobs.push(await item.getType(type));
+          }
+        }
+      }
+      if (blobs.length) {
+        await window.stageSchematicFiles(blobs, mode);
+      } else {
+        showToast("No image on clipboard. Capture (Win+Shift+S) then press Ctrl+V.");
+      }
+    } catch (err) {
+      showToast("Click this box and press Ctrl+V on your keyboard.");
+    }
+  };
+
+  // M2: Hover Thumbnail Preview & Click-to-Zoom on Attached LC Badge
+  window.showLcThumbPreview = function (evt, badgeEl) {
+    if (!badgeEl) return;
+    const rawSrc = badgeEl.getAttribute("data-imgsrc");
+    if (!rawSrc) return;
+    const cleanSrc = formatImageSrc(rawSrc);
+    let tip = document.getElementById("lcHoverTooltip");
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.id = "lcHoverTooltip";
+      tip.className = "lc-hover-tooltip";
+      document.body.appendChild(tip);
+    }
+    tip.innerHTML = `
+      <img src="${cleanSrc}" onerror="window.handleImageFallback(this, '${rawSrc}')">
+      <span>Click badge to zoom</span>
+    `;
+    tip.style.display = "flex";
+    const rect = badgeEl.getBoundingClientRect();
+    const topPos = Math.max(12, rect.top - 148);
+    const leftPos = Math.min(window.innerWidth - 220, Math.max(12, rect.left - 60));
+    tip.style.top = `${topPos}px`;
+    tip.style.left = `${leftPos}px`;
+  };
+
+  window.hideLcThumbPreview = function () {
+    const tip = document.getElementById("lcHoverTooltip");
+    if (tip) tip.style.display = "none";
+  };
+
+  // M1 + M3: Live Delta Telemetry vs Baseline (FST15 (1 body) for UP_01, FST15 for HB_01) & 0/9 LC Progress Bar
+  window.updateLiveFormTelemetry = function (partName, mode = "new") {
+    const iters = partsData.filter((p) => p["Part Name"] === partName);
+    if (!iters.length) return;
+    const baseVer = getDefaultBaseline(partName, iters);
+    const baseRow = iters.find((p) => String(p.Version) === String(baseVer)) || iters[0];
+    const baseWeight = parseFloat(baseRow["Weight (g)"]) || 0;
+    let baseStiff = {};
+    try {
+      if (baseRow["Stiffness Data"]) baseStiff = JSON.parse(baseRow["Stiffness Data"]);
+    } catch (e) {}
+
+    const wInp = document.getElementById(mode === "new" ? "newIterWeight" : "editIterWeight");
+    const wDeltaEl = document.getElementById(mode === "new" ? "newWeightLiveDelta" : "editWeightLiveDelta");
+    if (wInp && wDeltaEl) {
+      if (mode === "new") newIterDraft.weight = wInp.value;
+      const val = parseFloat(wInp.value);
+      if (!isNaN(val) && val > 0 && baseWeight > 0) {
+        const diff = val - baseWeight;
+        const pct = (diff / baseWeight) * 100;
+        const cls = Math.abs(diff) < 1e-6 ? "delta-neutral" : (diff < 0 ? "delta-good" : "delta-bad");
+        const sign = diff > 0 ? "+" : "";
+        wDeltaEl.className = `live-delta-pill ${cls}`;
+        wDeltaEl.textContent = `${sign}${diff.toFixed(1)} g (${sign}${pct.toFixed(1)}% vs ${formatVersion(baseRow.Version)})`;
+      } else {
+        wDeltaEl.className = "live-delta-pill";
+        wDeltaEl.textContent = "";
+      }
+    }
+
+    const isHB = partName === "HB_01";
+    const isUP = partName === "UP_01";
+    if (!isHB && !isUP) return;
+    const lcs = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
+    const decimals = isHB ? 5 : 4;
+    let filledCount = 0;
+
+    lcs.forEach((lc) => {
+      const inp = document.getElementById(`${mode}LC_${lc}`);
+      const dEl = document.getElementById(`${mode}Delta_${lc}`);
+      if (!inp) return;
+      const raw = inp.value.trim();
+      if (mode === "new") newIterDraft.stiff[lc] = raw;
+      const val = parseFloat(raw);
+      if (raw !== "" && !isNaN(val) && val > 0) {
+        filledCount++;
+        if (dEl) {
+          const bVal = typeof baseStiff[lc] === "object" ? baseStiff[lc].disp : parseFloat(baseStiff[lc] || 0);
+          if (bVal > 0) {
+            const diff = val - bVal;
+            const pct = (diff / bVal) * 100;
+            const cls = Math.abs(diff) < 1e-7 ? "delta-neutral" : (diff < 0 ? "delta-good" : "delta-bad");
+            const sign = diff > 0 ? "+" : "";
+            dEl.className = `live-delta-pill ${cls}`;
+            dEl.textContent = `${sign}${diff.toFixed(decimals)} (${sign}${pct.toFixed(1)}%)`;
+          } else {
+            dEl.textContent = "";
+          }
+        }
+      } else if (dEl) {
+        dEl.textContent = "";
+      }
+    });
+
+    const progFill = document.getElementById(`${mode}LcProgressFill`);
+    const progText = document.getElementById(`${mode}LcProgressText`);
+    if (progFill && progText) {
+      const pct = Math.round((filledCount / 9) * 100);
+      progFill.style.width = `${pct}%`;
+      progFill.classList.toggle("complete", filledCount === 9);
+      progText.textContent = `${filledCount} / 9 LCs`;
+      progText.style.color = filledCount === 9 ? "var(--delta-green)" : "var(--text-muted)";
+    }
+  };
+
+  // M6: 1-Click Copy Markdown/KaTeX Table with Emerald Flash
+  window.copyTableMarkdown = function (btnEl, type, partName) {
+    const iters = partsData.filter((p) => p["Part Name"] === partName);
+    if (!iters.length) return;
+    const evalRow = iters.find((p) => String(p.Version) === String(selectedEvalVersion)) || iters[iters.length - 1];
+    const refRow = iters.find((p) => String(p.Version) === String(selectedRefVersion)) || iters[0];
+
+    const evalKey = `${partName}__${evalRow.Version}`;
+    if (editStagedPartVer !== evalKey) {
+      editStagedPartVer = evalKey;
+      editIterSchematics = [...parseImagePaths(evalRow["Image Path"])];
+      editIterLcImages = {};
+    }
+    if (newIterDraft.part !== partName) {
+      newIterDraft = { part: partName, weight: "", desc: "", specs: "", stiff: {} };
+      newIterSchematics = [];
+      newIterLcImages = {};
+    }
+    const baseVerForDelta = getDefaultBaseline(partName, iters);
+    let md = "";
+
+    if (type === "mass") {
+      const ew = parseFloat(evalRow["Weight (g)"]) || 0;
+      const rw = parseFloat(refRow["Weight (g)"]) || 0;
+      const diff = ew - rw;
+      const pct = rw > 0 ? ((diff / rw) * 100).toFixed(1) : "0.0";
+      const sign = diff > 0 ? "+" : "";
+      md = `| Metric | ${formatVersion(evalRow.Version)} | ${formatVersion(refRow.Version)} | Diff ($\Delta\text{ g}$) | $\Delta\%$ |
+| :--- | :---: | :---: | :---: | :---: |
+| **Total Weight** | $${ew.toFixed(1)}\text{ g}$ | $${rw.toFixed(1)}\text{ g}$ | **$${sign}${diff.toFixed(1)}\text{ g}$** | **$${sign}${pct}\%$** |`;
+    } else {
+      let evalStiff = {}, refStiff = {};
+      try {
+        if (evalRow["Stiffness Data"]) evalStiff = JSON.parse(evalRow["Stiffness Data"]);
+        if (refRow["Stiffness Data"]) refStiff = JSON.parse(refRow["Stiffness Data"]);
+      } catch (e) {}
+      const decimals = partName === "HB_01" ? 5 : 4;
+      const descMap = { LC1: "Pure Braking", LC2: "Pure Acceleration", LC3: "Pure Cornering", LC4: "Braking + Cornering 1", LC5: "Braking + Cornering 2", LC6: "Acceleration + Cornering 1", LC7: "Acceleration + Cornering 2", LC8: "1kN Fy", LC9: "-1kN Fy" };
+      md = `| Load Case | Description | ${formatVersion(evalRow.Version)} ($\text{mm}$) | ${formatVersion(refRow.Version)} ($\text{mm}$) | $\Delta\text{ (mm)}$ | $\Delta\%$ |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+`;
+      ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"].forEach((lc) => {
+        const eVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : parseFloat(evalStiff[lc] || 0);
+        const rVal = typeof refStiff[lc] === "object" ? refStiff[lc].disp : parseFloat(refStiff[lc] || 0);
+        const diff = eVal - rVal;
+        const pct = rVal > 0 ? ((diff / rVal) * 100).toFixed(1) : "0.0";
+        const sign = diff > 0 ? "+" : "";
+        md += `| **${lc}** | ${descMap[lc] || lc} | $${eVal.toFixed(decimals)}$ | $${rVal.toFixed(decimals)}$ | **$${sign}${diff.toFixed(decimals)}$** | **$${sign}${pct}\%$** |
+`;
+      });
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(md.trim()).then(() => {
+        if (btnEl) {
+          const orig = btnEl.textContent;
+          btnEl.textContent = "Copied!";
+          btnEl.classList.add("copied-flash");
+          setTimeout(() => {
+            btnEl.textContent = orig;
+            btnEl.classList.remove("copied-flash");
+          }, 1500);
+        }
+      });
+    }
+  };
 
   window.switchToTab = function (tabId) {
     const btn = document.querySelector(`.main-tabs-header .tab-btn[data-tab="${tabId}"]`);
@@ -842,12 +1038,20 @@
       item.addEventListener("click", () => {
         const nextView = item.getAttribute("data-view");
         if (nextView !== currentView) {
+          if (hasUnsavedChanges && !confirm("Discard unsaved iteration changes?")) {
+            return;
+          }
+          hasUnsavedChanges = false;
+          newIterSchematics = [];
+          newIterLcImages = {};
+          newIterDraft = { part: null, weight: "", desc: "", specs: "", stiff: {} };
           currentPartName = null;
           selectedEvalVersion = null;
           selectedRefVersion = null;
         }
         currentView = nextView;
         activeGalleryIndex = 0;
+        window.toggleMobileSidebar(false);
         buildSidebar();
         renderCurrentView();
       });
@@ -1377,10 +1581,17 @@
 
   window.navigateToPartFea = function (partName, ver) {
     currentView = partName;
+    currentPartName = partName;
+    const iters = partsData.filter((p) => p["Part Name"] === partName);
     selectedEvalVersion = ver;
-    activePartTab = "tabFea";
+    selectedRefVersion = getDefaultBaseline(partName, iters);
+    activePartTab = "tabOverview";
     buildSidebar();
     renderPartView(partName);
+    setTimeout(() => {
+      const el = document.getElementById("feaScreenshotsContainer");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
   };
 
   window.navigateToPartOverview = function (partName, ver) {
@@ -1560,13 +1771,16 @@
                       </div>
                     ` : ""}
 
-                    ${p["Image Path"] ? `
-                      <div class="changelog-schematic">
-                        <img src="${formatImageSrc(p['Image Path'])}"
-                             alt="${escapeHtml(partName)} v${escapeHtml(p.Version)}"
-                             class="changelog-thumb"
-                             onclick="window.openLightbox('${formatImageSrc(p['Image Path'])}')"
-                             onerror="window.handleImageFallback(this)" />
+                    ${parseImagePaths(p["Image Path"]).length ? `
+                      <div class="changelog-schematic" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${parseImagePaths(p["Image Path"]).map((imgP) => `
+                          <img src="${formatImageSrc(imgP)}"
+                               data-rawpath="${escapeHtml(imgP)}"
+                               alt="${escapeHtml(partName)} v${escapeHtml(p.Version)}"
+                               class="changelog-thumb"
+                               onclick="window.openLightbox(this.src)"
+                               onerror="window.handleImageFallback(this, '${escapeHtml(imgP)}')" />
+                        `).join("")}
                       </div>
                     ` : ""}
 
@@ -1876,7 +2090,10 @@
         </div>
         `}
 
-        <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Mass Comparison</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h3 style="font-size: 1rem; margin: 0;">Mass Comparison</h3>
+          <button type="button" class="btn-copy-md" onclick="window.copyTableMarkdown(this, 'mass', '${partName}')">Copy Table</button>
+        </div>
         <div class="card-table-wrapper">
           <table class="styled-table">
             <thead>
@@ -2059,7 +2276,7 @@
         <div class="inline-tab-card">
           <div style="margin-bottom: 1.25rem;">
             <h3 style="font-size: 1.1rem; margin-bottom: 0.25rem;">New Iteration</h3>
-            <p style="font-size: 0.82rem; color: var(--text-muted);">Create new design iteration for ${partName}</p>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Create blank design iteration for ${partName} (Live &Delta; vs ${formatVersion(baseVerForDelta)})</p>
           </div>
 
           ${!isEditor() ? `
@@ -2067,103 +2284,105 @@
             Editor access required to create iterations. Enter fine-grained PAT in Cloud Settings.
           </div>
           ` : `
-          <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
-            <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-              Copy From:
-              <select id="selectNewIterSource" class="form-input" style="width: auto; display: inline-block; margin-left: 0.5rem;">
-                ${iters.map((it, idx) => `<option value="${it.Version}" ${idx === iters.length - 1 ? "selected" : ""}>${formatVersion(it.Version)} (${parseFloat(it["Weight (g)"] || 0).toFixed(1)} g)</option>`).join("")}
-              </select>
-            </label>
-          </div>
-
           <div class="form-row">
             <div class="form-group">
               <label for="newIterVer">Version ID</label>
-              <input type="text" id="newIterVer" class="form-input" value="${nextVer}">
+              <input type="text" id="newIterVer" class="form-input" value="${nextVer}" oninput="window.markUnsaved(true)">
             </div>
             <div class="form-group">
-              <label for="newIterWeight">Weight (g)</label>
-              <input type="number" step="0.1" id="newIterWeight" class="form-input" value="${parseFloat(latest["Weight (g)"] || 0)}">
+              <label for="newIterWeight" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Weight (g)</span>
+                <span id="newWeightLiveDelta" class="live-delta-pill"></span>
+              </label>
+              <input type="number" step="0.1" id="newIterWeight" class="form-input" placeholder="0.0" value="${newIterDraft.weight}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'new')">
             </div>
           </div>
 
           <div class="form-group">
             <label for="newIterDesc">Description</label>
-            <input type="text" id="newIterDesc" class="form-input" placeholder="Summary of changes" value="${latest.Description || ""}">
+            <input type="text" id="newIterDesc" class="form-input" placeholder="Summary of changes" value="${escapeHtml(newIterDraft.desc)}" oninput="newIterDraft.desc = this.value; window.markUnsaved(true)">
           </div>
 
           <div class="form-group">
             <label for="newIterSpecs">Specifications</label>
-            <textarea id="newIterSpecs" class="form-textarea" placeholder="Feature: Value">${latest.Specifications || ""}</textarea>
+            <textarea id="newIterSpecs" class="form-textarea" placeholder="Feature: Value" oninput="newIterDraft.specs = this.value; window.markUnsaved(true)">${escapeHtml(newIterDraft.specs)}</textarea>
           </div>
 
           <!-- CAD Schematics Section -->
-          <div style="margin: 1.5rem 0 0.75rem;">
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">CAD Schematics</h4>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Capture in CAD (Win+Shift+S) and click Paste Schematic, or browse files.
+          <div style="margin: 1.5rem 0 0.5rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.2rem;">CAD Schematics</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">
+              Hover or click this box and press <strong>Ctrl+V</strong> (instant, no popup), drag &amp; drop, or browse multiple photos.
             </p>
           </div>
 
-          <div class="paste-action-bar">
-            <button type="button" class="btn-paste-clipboard" onclick="window.pasteSchematicFromClipboard('${partName}', 'new')">Paste Schematic</button>
-            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpNewIterSchematic').click()">Browse File</button>
-            <span class="paste-hint-text">Or drag and drop files below</span>
+          <div class="paste-action-bar paste-zone-box ${activePasteTarget === "schematic" ? "active-zone" : ""}" id="dropzoneNewSchematic" data-paste-zone="schematic" onmouseenter="window.setPasteTarget('schematic')" onclick="window.setPasteTarget('schematic')">
+            <span class="paste-ready-badge">Ctrl+V Ready (CAD Photos)</span>
+            <button type="button" class="btn-browse-file" onclick="event.stopPropagation(); document.getElementById('fileInpNewIterSchematic').click()">Browse Files</button>
+            <span class="paste-hint-text">Supports multiple CAD photos (Ctrl+V or Drag &amp; Drop)</span>
           </div>
           <input type="file" id="fileInpNewIterSchematic" accept="image/*" multiple style="display: none;">
 
           <div id="newSchematicPreview" style="margin-bottom: 1.25rem;">
-            ${newIterSchematic ? `
-              <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.5rem;">
-                <img src="${newIterSchematic}" style="max-height: 60px; border-radius: 4px;">
-                <span class="tag" style="color: var(--delta-green); border-color: var(--delta-green);">Staged</span>
-                <button type="button" class="btn-action danger" onclick="window.clearNewSchematic()">Remove</button>
-              </div>
-            ` : ""}
+            ${renderStagedSchematicsList("new")}
           </div>
 
           <!-- FEA Displacements Section -->
           ${partLcs.length ? `
-          <div style="margin: 1.5rem 0 0.75rem;">
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Capture in nTop (Win+Shift+S) and click Paste from Clipboard, or press Ctrl+V.
-            </p>
+          <div style="margin: 1.5rem 0 0.5rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h4 style="font-size: 0.95rem; margin-bottom: 0.2rem;">FEA Displacements</h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">
+                Hover or click below and press <strong>Ctrl+V</strong> to auto-extract LC &amp; displacement via OCR.
+              </p>
+            </div>
+            <div style="min-width: 160px; text-align: right;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">
+                <span style="color: var(--text-dim);">OCR Progress</span>
+                <span id="newLcProgressText" style="color: var(--text-muted);">0 / 9 LCs</span>
+              </div>
+              <div class="lc-progress-bar">
+                <div id="newLcProgressFill" class="lc-progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
           </div>
 
-          <div class="paste-action-bar">
-            <button type="button" class="btn-paste-clipboard" onclick="window.pasteFeaFromClipboard('${partName}', 'new')">Paste from Clipboard</button>
-            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpNewIterFea').click()">Browse File</button>
-            <span class="paste-hint-text">Or press Ctrl+V anywhere on this tab</span>
+          <div class="paste-action-bar paste-zone-box ${activePasteTarget === "fea" ? "active-zone" : ""}" id="dropzoneNewFea" data-paste-zone="fea" onmouseenter="window.setPasteTarget('fea')" onclick="window.setPasteTarget('fea')">
+            <span class="paste-ready-badge">Ctrl+V Ready (FEA OCR)</span>
+            <button type="button" class="btn-browse-file" onclick="event.stopPropagation(); document.getElementById('fileInpNewIterFea').click()">Browse File</button>
+            <span class="paste-hint-text">Press Ctrl+V directly after Win+Shift+S in nTop</span>
           </div>
           <input type="file" id="fileInpNewIterFea" accept="image/*" style="display: none;">
 
-          <div class="card-table-wrapper" style="margin-top: 0.75rem; margin-bottom: 1.5rem; max-width: 650px;">
+          <div class="card-table-wrapper" style="margin-top: 0.75rem; margin-bottom: 1.5rem; max-width: 760px;" onmouseenter="window.setPasteTarget('fea')">
             <table class="styled-table">
               <thead>
                 <tr>
-                  <th style="width: 60%;">Load Case</th>
-                  <th style="width: 40%;">Displacement (mm)</th>
+                  <th style="width: 46%;">Load Case</th>
+                  <th style="width: 54%;">Displacement (mm) &amp; Live &Delta; vs ${formatVersion(baseVerForDelta)}</th>
                 </tr>
               </thead>
               <tbody>
                 ${partLcs.map((lc) => {
-                  const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
+                  const draftVal = newIterDraft.stiff[lc] !== undefined ? newIterDraft.stiff[lc] : "";
                   const desc = descMap[lc] || "";
-                  const hasImg = newIterLcImages[lc];
+                  const imgSrc = newIterLcImages[lc] || "";
                   return `
                     <tr>
                       <td>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                           <div>
-                            <strong style="color: #ffffff;">${lc}</strong>
+                            <strong style="color: var(--text-main);">${lc}</strong>
                             <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 0.5rem;">${desc}</span>
                           </div>
-                          <span id="new_badge_${lc}" class="tag" style="display: ${hasImg ? "inline-block" : "none"}; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
+                          <span id="new_badge_${lc}" class="tag lc-attached-badge" data-imgsrc="${imgSrc}" style="display: ${imgSrc ? "inline-flex" : "none"};" onmouseenter="window.showLcThumbPreview(event, this)" onmouseleave="window.hideLcThumbPreview()" onclick="window.hideLcThumbPreview(); window.openLightbox(formatImageSrc(this.getAttribute('data-imgsrc')))">Attached</span>
                         </div>
                       </td>
                       <td>
-                        <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="newLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace;" value="${curVal}">
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                          <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="newLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace; max-width: 145px;" placeholder="0.00000" value="${draftVal}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'new')">
+                          <span id="newDelta_${lc}" class="live-delta-pill"></span>
+                        </div>
                       </td>
                     </tr>
                   `;
@@ -2185,7 +2404,7 @@
         <div class="inline-tab-card">
           <div style="margin-bottom: 1.25rem;">
             <h3 style="font-size: 1.1rem; margin-bottom: 0.25rem;">Edit Iteration</h3>
-            <p style="font-size: 0.82rem; color: var(--text-muted);">Modify recorded parameters for ${partName}</p>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Modify recorded parameters for ${partName} (Live &Delta; vs ${formatVersion(baseVerForDelta)})</p>
           </div>
 
           ${!isEditor() ? `
@@ -2208,82 +2427,100 @@
               <input type="text" class="form-input" value="${formatVersion(evalRow.Version)}" disabled>
             </div>
             <div class="form-group">
-              <label for="editIterWeight">Weight (g)</label>
-              <input type="number" step="0.1" id="editIterWeight" class="form-input" value="${parseFloat(evalRow["Weight (g)"] || 0)}">
+              <label for="editIterWeight" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Weight (g)</span>
+                <span id="editWeightLiveDelta" class="live-delta-pill"></span>
+              </label>
+              <input type="number" step="0.1" id="editIterWeight" class="form-input" value="${parseFloat(evalRow["Weight (g)"] || 0)}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'edit')">
             </div>
           </div>
 
           <div class="form-group">
             <label for="editIterDesc">Description</label>
-            <input type="text" id="editIterDesc" class="form-input" value="${evalRow.Description || ""}">
+            <input type="text" id="editIterDesc" class="form-input" value="${escapeHtml(evalRow.Description || "")}" oninput="window.markUnsaved(true)">
           </div>
 
           <div class="form-group">
             <label for="editIterSpecs">Specifications</label>
-            <textarea id="editIterSpecs" class="form-textarea">${evalRow.Specifications || ""}</textarea>
+            <textarea id="editIterSpecs" class="form-textarea" oninput="window.markUnsaved(true)">${escapeHtml(evalRow.Specifications || "")}</textarea>
           </div>
 
           <!-- CAD Schematics Section -->
-          <div style="margin: 1.5rem 0 0.75rem;">
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">CAD Schematics</h4>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Capture in CAD (Win+Shift+S) and click Paste Schematic, or browse files.
+          <div style="margin: 1.5rem 0 0.5rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.2rem;">CAD Schematics</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">
+              Hover or click this box and press <strong>Ctrl+V</strong> (instant, no popup), drag &amp; drop, or browse multiple photos.
             </p>
           </div>
 
-          <div class="paste-action-bar">
-            <button type="button" class="btn-paste-clipboard" onclick="window.pasteSchematicFromClipboard('${partName}', 'edit')">Paste Schematic</button>
-            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpEditIterSchematic').click()">Browse File</button>
-            <span class="paste-hint-text">Or drag and drop files below</span>
+          <div class="paste-action-bar paste-zone-box ${activePasteTarget === "schematic" ? "active-zone" : ""}" id="dropzoneEditSchematic" data-paste-zone="schematic" onmouseenter="window.setPasteTarget('schematic')" onclick="window.setPasteTarget('schematic')">
+            <span class="paste-ready-badge">Ctrl+V Ready (CAD Photos)</span>
+            <button type="button" class="btn-browse-file" onclick="event.stopPropagation(); document.getElementById('fileInpEditIterSchematic').click()">Browse Files</button>
+            <span class="paste-hint-text">Add or remove multiple photos before clicking Save</span>
           </div>
           <input type="file" id="fileInpEditIterSchematic" accept="image/*" multiple style="display: none;">
 
           <div id="editSchematicPreview" style="margin-bottom: 1.25rem;">
-            ${renderSchematicThumbnails(evalRow, partName)}
+            ${renderStagedSchematicsList("edit")}
           </div>
 
           <!-- FEA Displacements Section -->
           ${partLcs.length ? `
-          <div style="margin: 1.5rem 0 0.75rem;">
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">FEA Displacements</h4>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Capture in nTop and click Paste from Clipboard, or press Ctrl+V.
-            </p>
+          <div style="margin: 1.5rem 0 0.5rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h4 style="font-size: 0.95rem; margin-bottom: 0.2rem;">FEA Displacements</h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">
+                Hover or click below and press <strong>Ctrl+V</strong> to auto-extract LC &amp; displacement via OCR.
+              </p>
+            </div>
+            <div style="min-width: 160px; text-align: right;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">
+                <span style="color: var(--text-dim);">OCR Progress</span>
+                <span id="editLcProgressText" style="color: var(--text-muted);">0 / 9 LCs</span>
+              </div>
+              <div class="lc-progress-bar">
+                <div id="editLcProgressFill" class="lc-progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
           </div>
 
-          <div class="paste-action-bar">
-            <button type="button" class="btn-paste-clipboard" onclick="window.pasteFeaFromClipboard('${partName}', 'edit')">Paste from Clipboard</button>
-            <button type="button" class="btn-browse-file" onclick="document.getElementById('fileInpEditIterFea').click()">Browse File</button>
-            <span class="paste-hint-text">Or press Ctrl+V anywhere on this tab</span>
+          <div class="paste-action-bar paste-zone-box ${activePasteTarget === "fea" ? "active-zone" : ""}" id="dropzoneEditFea" data-paste-zone="fea" onmouseenter="window.setPasteTarget('fea')" onclick="window.setPasteTarget('fea')">
+            <span class="paste-ready-badge">Ctrl+V Ready (FEA OCR)</span>
+            <button type="button" class="btn-browse-file" onclick="event.stopPropagation(); document.getElementById('fileInpEditIterFea').click()">Browse File</button>
+            <span class="paste-hint-text">Press Ctrl+V directly after Win+Shift+S in nTop</span>
           </div>
           <input type="file" id="fileInpEditIterFea" accept="image/*" style="display: none;">
 
-          <div class="card-table-wrapper" style="margin-top: 0.75rem; margin-bottom: 1.5rem; max-width: 650px;">
+          <div class="card-table-wrapper" style="margin-top: 0.75rem; margin-bottom: 1.5rem; max-width: 760px;" onmouseenter="window.setPasteTarget('fea')">
             <table class="styled-table">
               <thead>
                 <tr>
-                  <th style="width: 60%;">Load Case</th>
-                  <th style="width: 40%;">Displacement (mm)</th>
+                  <th style="width: 46%;">Load Case</th>
+                  <th style="width: 54%;">Displacement (mm) &amp; Live &Delta; vs ${formatVersion(baseVerForDelta)}</th>
                 </tr>
               </thead>
               <tbody>
                 ${partLcs.map((lc) => {
                   const curVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : (evalStiff[lc] || 0.0);
                   const desc = descMap[lc] || "";
-                  const hasImg = editIterLcImages[lc] || (evalRow["LC Images"] && parseLcImages(evalRow["LC Images"])[lc]);
+                  const savedLcMap = evalRow["LC Images"] ? parseLcImages(evalRow["LC Images"]) : {};
+                  const imgSrc = editIterLcImages[lc] || savedLcMap[lc] || "";
                   return `
                     <tr>
                       <td>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                           <div>
-                            <strong style="color: #ffffff;">${lc}</strong>
+                            <strong style="color: var(--text-main);">${lc}</strong>
                             <span style="color: var(--text-muted); font-size: 0.82rem; margin-left: 0.5rem;">${desc}</span>
                           </div>
-                          <span id="edit_badge_${lc}" class="tag" style="display: ${hasImg ? "inline-block" : "none"}; font-size: 0.65rem; color: var(--delta-green); border-color: var(--delta-green);">Attached</span>
+                          <span id="edit_badge_${lc}" class="tag lc-attached-badge" data-imgsrc="${imgSrc}" style="display: ${imgSrc ? "inline-flex" : "none"};" onmouseenter="window.showLcThumbPreview(event, this)" onmouseleave="window.hideLcThumbPreview()" onclick="window.hideLcThumbPreview(); window.openLightbox(formatImageSrc(this.getAttribute('data-imgsrc')))">Attached</span>
                         </div>
                       </td>
                       <td>
-                        <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace;" value="${curVal}">
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                          <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace; max-width: 145px;" value="${curVal}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'edit')">
+                          <span id="editDelta_${lc}" class="live-delta-pill"></span>
+                        </div>
                       </td>
                     </tr>
                   `;
@@ -2342,10 +2579,12 @@
       });
     });
 
-    // Attach listeners for inline actions
+    // Attach listeners for inline actions & initialize live telemetry
     attachInlineFormListeners(partName, evalRow, iters);
-    attachGalleryEventListeners(evalRow, partName);
     attachFeaListeners(evalRow, partName);
+    window.updateLiveFormTelemetry(partName, "new");
+    window.updateLiveFormTelemetry(partName, "edit");
+    window.markUnsaved(hasUnsavedChanges);
   }
 
   function renderSideSchematic(row) {
@@ -2428,24 +2667,7 @@
       };
     }
 
-    // 3. New Iteration Copy From Selector
-    const selCopy = document.getElementById("selectNewIterSource");
-    if (selCopy) {
-      selCopy.onchange = (e) => {
-        const srcVer = e.target.value;
-        const srcRow = iters.find((p) => String(p.Version) === String(srcVer));
-        if (srcRow) {
-          const wInp = document.getElementById("newIterWeight");
-          const dInp = document.getElementById("newIterDesc");
-          const sInp = document.getElementById("newIterSpecs");
-          if (wInp) wInp.value = parseFloat(srcRow["Weight (g)"] || 0);
-          if (dInp) dInp.value = srcRow.Description || "";
-          if (sInp) sInp.value = srcRow.Specifications || "";
-        }
-      };
-    }
-
-    // 4. New Iteration File Browse Input
+    // 3. File Browse & Drag-and-Drop Bindings (New & Edit)
     const fileNewFea = document.getElementById("fileInpNewIterFea");
     if (fileNewFea) {
       fileNewFea.onchange = (e) => {
@@ -2455,7 +2677,6 @@
       };
     }
 
-    // 5. Edit Iteration File Browse Input (FEA & Schematic)
     const fileEditFea = document.getElementById("fileInpEditIterFea");
     if (fileEditFea) {
       fileEditFea.onchange = (e) => {
@@ -2465,36 +2686,57 @@
       };
     }
 
+    const fileNewSch = document.getElementById("fileInpNewIterSchematic");
+    if (fileNewSch) {
+      fileNewSch.onchange = async (e) => {
+        if (e.target.files && e.target.files.length) {
+          await window.stageSchematicFiles(Array.from(e.target.files), "new");
+          fileNewSch.value = "";
+        }
+      };
+    }
+
     const fileEditSch = document.getElementById("fileInpEditIterSchematic");
     if (fileEditSch) {
       fileEditSch.onchange = async (e) => {
         if (e.target.files && e.target.files.length) {
-          await uploadImagesToIteration(Array.from(e.target.files), evalRow, partName);
-          showToast("Schematic attached successfully!");
+          await window.stageSchematicFiles(Array.from(e.target.files), "edit");
+          fileEditSch.value = "";
         }
       };
     }
 
-    // 6. New Iteration Schematic Upload
-    const dropNewSch = document.getElementById("dropzoneNewIterSchematic");
-    const fileNewSch = document.getElementById("fileInpNewIterSchematic");
-    const labelNewSch = document.getElementById("labelNewIterSchematic");
-    if (dropNewSch && fileNewSch) {
-      dropNewSch.onclick = () => fileNewSch.click();
-      fileNewSch.onchange = async (e) => {
-        if (e.target.files && e.target.files[0]) {
-          const downscaled = await downscaleImage(e.target.files[0]);
-          newIterSchematic = downscaled;
-          if (labelNewSch) labelNewSch.textContent = `Schematic loaded (${e.target.files[0].name})`;
-          dropNewSch.style.borderColor = "var(--delta-green)";
+    [
+      { id: "dropzoneNewSchematic", mode: "new", type: "schematic" },
+      { id: "dropzoneEditSchematic", mode: "edit", type: "schematic" },
+      { id: "dropzoneNewFea", mode: "new", type: "fea" },
+      { id: "dropzoneEditFea", mode: "edit", type: "fea" }
+    ].forEach(({ id, mode, type }) => {
+      const dz = document.getElementById(id);
+      if (!dz) return;
+      dz.ondragover = (e) => {
+        e.preventDefault();
+        window.setPasteTarget(type);
+      };
+      dz.ondrop = async (e) => {
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith("image/"));
+        if (!files.length) return;
+        if (type === "schematic") {
+          await window.stageSchematicFiles(files, mode);
+        } else {
+          for (const f of files) {
+            await handleFeaScreenshotPasted(f, partName, mode);
+          }
         }
       };
-    }
+    });
 
-    // 7. Save New Iteration Button
+    // 4. Save New Iteration Button (Atomic Batch Commit, 100% Blank Inheritance)
     const btnSaveNew = document.getElementById("btnSaveNewIterInline");
     if (btnSaveNew) {
       btnSaveNew.onclick = async () => {
+        if (btnSaveNew.disabled) return;
         const v = document.getElementById("newIterVer").value.trim();
         const w = parseFloat(document.getElementById("newIterWeight").value) || 0;
         const desc = document.getElementById("newIterDesc").value.trim();
@@ -2504,11 +2746,14 @@
           alert("Version string is required.");
           return;
         }
-
         if (iters.some((it) => String(it.Version) === v)) {
           alert("Version " + v + " already exists for this part.");
           return;
         }
+
+        btnSaveNew.disabled = true;
+        const origBtnText = btnSaveNew.textContent;
+        btnSaveNew.textContent = "Preparing...";
 
         const isHB = partName === "HB_01";
         const isUP = partName === "UP_01";
@@ -2524,55 +2769,36 @@
           });
         }
 
-        const latest = iters[iters.length - 1];
+        const latest = iters[iters.length - 1] || {};
         const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-
-        let finalLcImages = {};
-        try {
-          if (latest["LC Images"]) finalLcImages = JSON.parse(latest["LC Images"]);
-        } catch (e) {}
-
         const vClean = formatVersion(v).replace(/[^a-zA-Z0-9_-]/g, "_");
         const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+
+        const batchFiles = [];
+        const finalLcImages = {};
 
         for (const [lc, imgVal] of Object.entries(newIterLcImages)) {
           if (typeof imgVal === "string" && imgVal.startsWith("data:image")) {
             const filename = `images/${partName}_${vClean}_${lc}_${timestamp}.png`;
             localImageCache.set(filename, imgVal);
-            if (window.DTCloud && window.DTCloud.isConfigured()) {
-              try {
-                await window.DTCloud.commitBinaryFile(filename, imgVal, `Upload ${filename}`);
-                finalLcImages[lc] = filename;
-              } catch (err) {
-                console.warn(`Failed to upload binary LC image for ${lc}:`, err);
-                finalLcImages[lc] = imgVal;
-              }
-            } else {
-              finalLcImages[lc] = imgVal;
-            }
+            batchFiles.push({ path: filename, base64: imgVal });
+            finalLcImages[lc] = filename;
           } else if (imgVal) {
             finalLcImages[lc] = imgVal;
           }
         }
 
-        let stagedImagePath = latest["Image Path"] || null;
-        if (newIterSchematic) {
-          const vClean = formatVersion(v).replace(/[^a-zA-Z0-9_-]/g, "_");
-          const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-          const filename = `images/${partName}_${vClean}_${timestamp}_sch.png`;
-          localImageCache.set(filename, newIterSchematic);
-          if (window.DTCloud && window.DTCloud.isConfigured()) {
-            try {
-              await window.DTCloud.commitBinaryFile(filename, newIterSchematic, `Upload ${filename}`);
-              stagedImagePath = filename;
-            } catch (err) {
-              console.warn("Failed to upload binary schematic:", err);
-              stagedImagePath = newIterSchematic;
-            }
-          } else {
-            stagedImagePath = newIterSchematic;
+        const finalSchematics = [];
+        newIterSchematics.forEach((imgVal, idx) => {
+          if (typeof imgVal === "string" && imgVal.startsWith("data:image")) {
+            const filename = `images/${partName}_${vClean}_${timestamp}_sch${idx + 1}.png`;
+            localImageCache.set(filename, imgVal);
+            batchFiles.push({ path: filename, base64: imgVal });
+            finalSchematics.push(filename);
+          } else if (imgVal) {
+            finalSchematics.push(imgVal);
           }
-        }
+        });
 
         const newRow = {
           Subassembly: latest.Subassembly || "Drivetrain",
@@ -2582,31 +2808,39 @@
           "Weight (g)": w,
           Description: desc,
           Specifications: specs,
-          "Image Path": stagedImagePath,
-          "Stiffness Data": partLcs.length ? JSON.stringify(stiffObj) : latest["Stiffness Data"],
+          "Image Path": formatImagePaths(finalSchematics),
+          "Stiffness Data": partLcs.length ? JSON.stringify(stiffObj) : null,
           "LC Images": Object.keys(finalLcImages).length ? JSON.stringify(finalLcImages) : null,
           "Tolerancing Data": latest["Tolerancing Data"] || null,
           Justification: latest["Justification"] || null
         };
 
         partsData.push(newRow);
+        batchFiles.push({ path: "data/parts.json", json: partsData });
 
         try {
-          await window.DTCloud.commitFile("data/parts.json", partsData, `Add ${partName} v${v}`);
+          await window.DTCloud.commitBatch(batchFiles, `Add ${partName} v${v}`, (msg) => {
+            btnSaveNew.textContent = msg;
+          });
           selectedEvalVersion = v;
           newIterLcImages = {};
-          newIterSchematic = null;
+          newIterSchematics = [];
+          newIterDraft = { part: partName, weight: "", desc: "", specs: "", stiff: {} };
+          window.markUnsaved(false);
           activePartTab = "tabOverview";
           buildSidebar();
           renderPartView(partName);
           showToast(`Iteration v${v} saved!`);
         } catch (e) {
+          partsData.pop();
+          btnSaveNew.disabled = false;
+          btnSaveNew.textContent = origBtnText;
           alert("Error saving iteration: " + e.message);
         }
       };
     }
 
-    // 8. Edit Iteration Selector & Save Button
+    // 5. Edit Iteration Selector & Atomic Batch Save Button
     const editSelVer = document.getElementById("editSelectVer");
     if (editSelVer) {
       editSelVer.onchange = (e) => {
@@ -2618,9 +2852,14 @@
     const btnSaveEdit = document.getElementById("btnSaveEditIterInline");
     if (btnSaveEdit) {
       btnSaveEdit.onclick = async () => {
+        if (btnSaveEdit.disabled) return;
         const targetVer = editSelVer ? editSelVer.value : evalRow.Version;
         const row = partsData.find((p) => p["Part Name"] === partName && String(p.Version) === String(targetVer));
         if (!row) return;
+
+        btnSaveEdit.disabled = true;
+        const origBtnText = btnSaveEdit.textContent;
+        btnSaveEdit.textContent = "Preparing...";
 
         const w = parseFloat(document.getElementById("editIterWeight").value) || 0;
         const desc = document.getElementById("editIterDesc").value.trim();
@@ -2645,30 +2884,22 @@
           row["Stiffness Data"] = JSON.stringify(stiffObj);
         }
 
+        const vClean = formatVersion(targetVer).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+        const batchFiles = [];
+
         if (Object.keys(editIterLcImages).length) {
           let curLc = {};
           try {
             if (row["LC Images"]) curLc = JSON.parse(row["LC Images"]);
           } catch (e) {}
 
-          const vClean = formatVersion(targetVer).replace(/[^a-zA-Z0-9_-]/g, "_");
-          const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-
           for (const [lc, imgVal] of Object.entries(editIterLcImages)) {
             if (typeof imgVal === "string" && imgVal.startsWith("data:image")) {
               const filename = `images/${partName}_${vClean}_${lc}_${timestamp}.png`;
               localImageCache.set(filename, imgVal);
-              if (window.DTCloud && window.DTCloud.isConfigured()) {
-                try {
-                  await window.DTCloud.commitBinaryFile(filename, imgVal, `Upload ${filename}`);
-                  curLc[lc] = filename;
-                } catch (err) {
-                  console.warn(`Failed to upload binary LC image for ${lc}:`, err);
-                  curLc[lc] = imgVal;
-                }
-              } else {
-                curLc[lc] = imgVal;
-              }
+              batchFiles.push({ path: filename, base64: imgVal });
+              curLc[lc] = filename;
             } else if (imgVal) {
               curLc[lc] = imgVal;
             }
@@ -2676,39 +2907,43 @@
           row["LC Images"] = JSON.stringify(curLc);
         }
 
-        if (editIterSchematic) {
-          const vClean = formatVersion(targetVer).replace(/[^a-zA-Z0-9_-]/g, "_");
-          const timestamp = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-          const filename = `images/${partName}_${vClean}_${timestamp}_sch.png`;
-          localImageCache.set(filename, editIterSchematic);
-          if (window.DTCloud && window.DTCloud.isConfigured()) {
-            try {
-              await window.DTCloud.commitBinaryFile(filename, editIterSchematic, `Upload ${filename}`);
-              row["Image Path"] = filename;
-            } catch (err) {
-              console.warn("Failed to upload edit binary schematic:", err);
-              row["Image Path"] = editIterSchematic;
+        if (Array.isArray(editIterSchematics)) {
+          const finalEditSchematics = [];
+          editIterSchematics.forEach((imgVal, idx) => {
+            if (typeof imgVal === "string" && imgVal.startsWith("data:image")) {
+              const filename = `images/${partName}_${vClean}_${timestamp}_sch${idx + 1}.png`;
+              localImageCache.set(filename, imgVal);
+              batchFiles.push({ path: filename, base64: imgVal });
+              finalEditSchematics.push(filename);
+            } else if (imgVal) {
+              finalEditSchematics.push(imgVal);
             }
-          } else {
-            row["Image Path"] = editIterSchematic;
-          }
-          editIterSchematic = null;
+          });
+          row["Image Path"] = formatImagePaths(finalEditSchematics);
         }
 
+        batchFiles.push({ path: "data/parts.json", json: partsData });
+
         try {
-          await window.DTCloud.commitFile("data/parts.json", partsData, `Update ${partName} v${targetVer}`);
+          await window.DTCloud.commitBatch(batchFiles, `Update ${partName} v${targetVer}`, (msg) => {
+            btnSaveEdit.textContent = msg;
+          });
           editIterLcImages = {};
+          editStagedPartVer = null;
+          window.markUnsaved(false);
           activePartTab = "tabOverview";
           renderPartView(partName);
           showToast(`Iteration ${formatVersion(targetVer)} updated!`);
         } catch (e) {
+          btnSaveEdit.disabled = false;
+          btnSaveEdit.textContent = origBtnText;
           alert("Error saving iteration: " + e.message);
         }
       };
     }
   }
 
-  // Global paste listener for FEA Screenshot OCR
+  // Global paste listener for Instant Zero-Popup Ctrl+V (Routes to CAD Schematics or FEA OCR)
   window.addEventListener("paste", async (e) => {
     if (!currentView || currentView === "assembly" || currentView === "requirements" || currentView === "changelog" || currentView === "trash") {
       return;
@@ -2719,14 +2954,22 @@
     }
 
     if (e.clipboardData && e.clipboardData.items) {
+      const imageFiles = [];
       for (const item of e.clipboardData.items) {
         if (item.type.indexOf("image") !== -1) {
-          e.preventDefault();
           const file = item.getAsFile();
-          if (file) {
-            handleFeaScreenshotPasted(file, currentView, activePartTab === "tabNewIter" ? "new" : "edit");
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (imageFiles.length) {
+        e.preventDefault();
+        const mode = activePartTab === "tabNewIter" ? "new" : "edit";
+        if (activePasteTarget === "schematic") {
+          await window.stageSchematicFiles(imageFiles, mode);
+        } else {
+          for (const f of imageFiles) {
+            await handleFeaScreenshotPasted(f, currentView, mode);
           }
-          break;
         }
       }
     }
@@ -2807,55 +3050,10 @@
         lcKeys = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
       } else {
         const fallbackMsg = `
-          <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">FEA Displacements</h3>
-          <p style="color: var(--text-dim); font-size: 0.88rem;">No FEA load-case displacement data recorded for this iteration.</p>
-        `;
-        return showFull ? fallbackMsg + renderFeaScreenshots(evalRow, refRow) : fallbackMsg;
-      }
-    }
-
-    const descMap = {
-      LC1: "Pure Braking",
-      LC2: "Pure Acceleration",
-      LC3: "Pure Cornering",
-      LC4: "Braking + Cornering 1",
-      LC5: "Braking + Cornering 2",
-      LC6: "Acceleration + Cornering 1",
-      LC7: "Acceleration + Cornering 2",
-      LC8: "1kN Fy",
-      LC9: "-1kN Fy"
-    };
-
-    const isHB = evalRow["Part Name"] === "HB_01";
-    const decimals = isHB ? 5 : 4;
-
-    let rowsHtml = "";
-    lcKeys.forEach((lc) => {
-      const eVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : parseFloat(evalStiff[lc] || 0);
-      const rVal = typeof refStiff[lc] === "object" ? refStiff[lc].disp : parseFloat(refStiff[lc] || 0);
-      const diff = eVal - rVal;
-      const pct = rVal > 0 ? (diff / rVal) * 100 : 0;
-      const isZero = Math.abs(diff) < 1e-7;
-      const deltaClass = isZero ? "delta-neutral" : (diff < 0 ? "delta-good" : "delta-bad");
-
-      rowsHtml += `
-        <tr>
-          <td><strong>${lc}</strong></td>
-          <td style="color: var(--text-muted); font-size: 0.82rem;">${descMap[lc] || lc}</td>
-          <td class="mono">${eVal.toFixed(decimals)} mm</td>
-          <td class="mono">${rVal.toFixed(decimals)} mm</td>
-          <td class="mono ${deltaClass}">
-            <strong>${isZero ? "0.0" : (diff <= 0 ? "" : "+")}${diff.toFixed(decimals)} mm</strong>
-          </td>
-          <td class="mono ${deltaClass}">
-            <strong>${isZero ? "0.0%" : (diff <= 0 ? "" : "+") + pct.toFixed(1) + "%"}</strong>
-          </td>
-        </tr>
-      `;
-    });
-
-    let html = `
-      <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">FEA Displacements</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0 0.5rem;">
+        <h3 style="font-size: 1rem; margin: 0;">FEA Displacements</h3>
+        <button type="button" class="btn-copy-md" onclick="window.copyTableMarkdown(this, 'fea', '${evalRow["Part Name"]}')">Copy Table</button>
+      </div>
       <div class="card-table-wrapper">
         <table class="styled-table">
           <thead>
@@ -2916,7 +3114,15 @@
 
     let html = `
       <div style="margin-top: 1.5rem;" id="feaScreenshotsContainer">
-        <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">FEA Screenshots</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <h3 style="font-size: 1rem; margin: 0;">FEA Screenshots</h3>
+          ${isDistinct && cleanRef && cleanEval ? `
+          <div class="fea-mode-toggle">
+            <button type="button" class="fea-mode-btn ${feaCompareMode === "side" ? "active" : ""}" onclick="window.setFeaCompareMode('side')">Side by Side</button>
+            <button type="button" class="fea-mode-btn ${feaCompareMode === "flip" ? "active" : ""}" onclick="window.setFeaCompareMode('flip')">Flip Overlay</button>
+          </div>
+          ` : ""}
+        </div>
         <div class="fea-lc-header">
           ${availLcs.map(lc => `
             <button class="fea-lc-btn ${lc === activeFeaLc ? "active" : ""}" onclick="window.selectFeaLc('${lc}')">${lc}</button>
@@ -2925,26 +3131,51 @@
     `;
 
     if (isDistinct && cleanRef && cleanEval) {
-      html += `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem;">
-          <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
-            <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
-              Baseline: ${formatVersion(refRow.Version)} (${activeFeaLc})
+      if (feaCompareMode === "flip") {
+        const showingRef = feaFlipShowRef;
+        const activeSrc = showingRef ? cleanRef : cleanEval;
+        const activeRaw = showingRef ? refImg : evalImg;
+        const activeLabel = showingRef
+          ? `Baseline: ${formatVersion(refRow.Version)} (${activeFeaLc})`
+          : `Evaluated: ${formatVersion(evalRow.Version)} (${activeFeaLc})`;
+        html += `
+          <div class="card-table-wrapper" style="padding: 0.85rem; text-align: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+              <span class="badge" style="background: ${showingRef ? "rgba(255,255,255,0.06)" : "rgba(34, 197, 94, 0.15)"}; color: ${showingRef ? "var(--text-muted)" : "var(--delta-green)"}; border: 1px solid ${showingRef ? "var(--border-color)" : "rgba(34, 197, 94, 0.35)"}; padding: 3px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: 700;">
+                ${activeLabel}
+              </span>
+              <div style="display: flex; gap: 0.5rem;">
+                <button type="button" class="btn-action" onclick="window.toggleFeaFlipSource()">Flip (${showingRef ? "Show " + formatVersion(evalRow.Version) : "Show " + formatVersion(refRow.Version)})</button>
+                <button type="button" class="btn-action" onclick="window.openLightbox('${activeSrc}')">Zoom</button>
+              </div>
             </div>
-            <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
-              <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc} Baseline" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img">
+            <div class="gallery-viewport" style="min-height: 340px; max-height: 480px; cursor: pointer;" onclick="window.toggleFeaFlipSource()" title="Click image to flip between Baseline and Evaluated">
+              <img src="${activeSrc}" data-rawpath="${activeRaw}" alt="${activeLabel}" onerror="window.handleImageFallback(this, '${activeRaw}')" class="gallery-main-img">
             </div>
           </div>
-          <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
-            <div style="font-size: 0.82rem; font-weight: 600; color: var(--accent-red); margin-bottom: 0.5rem;">
-              Evaluated: ${formatVersion(evalRow.Version)} (${activeFeaLc})
+        `;
+      } else {
+        html += `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+            <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
+              <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
+                Baseline: ${formatVersion(refRow.Version)} (${activeFeaLc})
+              </div>
+              <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+                <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc} Baseline" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img">
+              </div>
             </div>
-            <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
-              <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc} Evaluated" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img">
+            <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
+              <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">
+                Evaluated: ${formatVersion(evalRow.Version)} (${activeFeaLc})
+              </div>
+              <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+                <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc} Evaluated" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img">
+              </div>
             </div>
           </div>
-        </div>
-      `;
+        `;
+      }
     } else if (cleanEval) {
       html += `
         <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
@@ -2998,15 +3229,14 @@
 
         localImageCache.set(filename, dataUrl);
 
-        if (window.DTCloud.isConfigured()) {
-          await window.DTCloud.commitBinaryFile(filename, dataUrl, `Upload ${filename}`);
-        }
-
         const lcMap = parseLcImages(evalRow["LC Images"]);
         lcMap[activeFeaLc] = filename;
         evalRow["LC Images"] = JSON.stringify(lcMap);
 
-        await window.DTCloud.commitFile("data/parts.json", partsData, `Update ${activeFeaLc} for ${partName} ${evalRow.Version}`);
+        await window.DTCloud.commitBatch([
+          { path: filename, base64: dataUrl },
+          { path: "data/parts.json", json: partsData }
+        ], `Update ${activeFeaLc} for ${partName} ${evalRow.Version}`);
         renderPartView(partName);
       } catch (err) {
         alert("Upload error: " + err.message);
@@ -3014,8 +3244,7 @@
     };
   }
 
-  window.selectFeaLc = function (lc) {
-    activeFeaLc = lc;
+  function refreshFeaScreenshotsDOM() {
     const iters = partsData.filter((p) => p["Part Name"] === currentView);
     if (!iters.length) return;
     const evalRow = iters.find((p) => String(p.Version) === String(selectedEvalVersion)) || iters[iters.length - 1];
@@ -3032,10 +3261,26 @@
       }
     }
     renderCurrentView();
+  }
+
+  window.selectFeaLc = function (lc) {
+    activeFeaLc = lc;
+    refreshFeaScreenshotsDOM();
   };
 
-  // Multi-image Gallery Renderer
-  function renderGallery(evalRow, partName) {
+  window.setFeaCompareMode = function (mode) {
+    feaCompareMode = mode === "flip" ? "flip" : "side";
+    feaFlipShowRef = false;
+    refreshFeaScreenshotsDOM();
+  };
+
+  window.toggleFeaFlipSource = function () {
+    feaFlipShowRef = !feaFlipShowRef;
+    refreshFeaScreenshotsDOM();
+  };
+
+  // Multi-image Read-Only Gallery Renderer (Add/Remove is exclusively in New Iteration and Edit)
+  function renderGallery(evalRow) {
     const images = parseImagePaths(evalRow["Image Path"]);
     if (activeGalleryIndex >= images.length) {
       activeGalleryIndex = Math.max(0, images.length - 1);
@@ -3044,9 +3289,7 @@
     const currentImg = images[activeGalleryIndex];
     const currentClean = currentImg ? formatImageSrc(currentImg) : "";
 
-    let html = `
-      <div class="gallery-container">
-    `;
+    let html = `<div class="gallery-container">`;
 
     if (images.length > 0) {
       html += `
@@ -3056,7 +3299,7 @@
         </div>
       `;
 
-      if (images.length > 1 || isEditor()) {
+      if (images.length > 1) {
         html += `
           <div class="gallery-filmstrip">
             ${images.map((imgP, i) => {
@@ -3065,7 +3308,6 @@
               return `
                 <div class="gallery-thumb-item">
                   <img src="${cleanThumb}" data-rawpath="${imgP}" alt="Thumbnail ${i + 1}" class="gallery-thumb ${isActive}" onerror="window.handleImageFallback(this, '${imgP}')" onclick="window.selectGalleryImage(${i})">
-                  ${isEditor() ? `<button class="gallery-thumb-delete" onclick="window.deleteGalleryImage('${partName}', '${evalRow.Version}', ${i})">X</button>` : ""}
                 </div>
               `;
             }).join("")}
@@ -3075,17 +3317,7 @@
     } else {
       html += `
         <div style="padding: 3rem; text-align: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-dim);">
-          No CAD schematic or render attached for this iteration.
-        </div>
-      `;
-    }
-
-    if (isEditor()) {
-      html += `
-        <div class="gallery-dropzone" id="galleryDropzone">
-          <input type="file" id="fileGalleryUpload" accept="image/*" multiple style="display: none;">
-          <div>Drag and drop images, click to upload, or paste (Ctrl+V)</div>
-          <div class="form-hint">Images auto-scaled to max 1920x1080 to prevent repository bloat</div>
+          No CAD schematic attached for this iteration. Add photos in Edit or New Iteration.
         </div>
       `;
     }
@@ -3094,82 +3326,10 @@
     return html;
   }
 
-  // Select gallery index
   window.selectGalleryImage = function (index) {
     activeGalleryIndex = index;
     renderCurrentView();
   };
-
-  // Delete gallery image
-  window.deleteGalleryImage = async function (partName, version, imgIndex) {
-    if (!isEditor()) return;
-    if (!confirm("Remove this image from iteration?")) return;
-
-    const row = partsData.find((p) => p["Part Name"] === partName && String(p.Version) === String(version));
-    if (!row) return;
-
-    const images = parseImagePaths(row["Image Path"]);
-    images.splice(imgIndex, 1);
-    row["Image Path"] = formatImagePaths(images);
-
-    try {
-      await window.DTCloud.commitFile("data/parts.json", partsData, `Remove image from ${partName} ${version}`);
-      if (activeGalleryIndex >= images.length) {
-        activeGalleryIndex = Math.max(0, images.length - 1);
-      }
-      renderPartView(partName);
-    } catch (e) {
-      alert("Error removing image: " + e.message);
-    }
-  };
-
-  // Attach gallery listeners for upload & clipboard paste
-  function attachGalleryEventListeners(evalRow, partName) {
-    const dropzone = document.getElementById("galleryDropzone");
-    const fileInput = document.getElementById("fileGalleryUpload");
-    if (!dropzone || !fileInput) return;
-
-    dropzone.onclick = () => fileInput.click();
-
-    fileInput.onchange = async () => {
-      const files = Array.from(fileInput.files);
-      if (!files.length) return;
-      await uploadImagesToIteration(files, evalRow, partName);
-    };
-
-    dropzone.ondragover = (e) => {
-      e.preventDefault();
-      dropzone.classList.add("dragover");
-    };
-
-    dropzone.ondragleave = () => {
-      dropzone.classList.remove("dragover");
-    };
-
-    dropzone.ondrop = async (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("dragover");
-      const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
-      if (files.length) {
-        await uploadImagesToIteration(files, evalRow, partName);
-      }
-    };
-
-    // Global paste listener when viewing this part schematic tab
-    window.onpaste = async (e) => {
-      if (currentView !== partName || activePartTab !== "tabSchematic") return;
-      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-      const imageFiles = [];
-      for (const item of items) {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          imageFiles.push(item.getAsFile());
-        }
-      }
-      if (imageFiles.length) {
-        await uploadImagesToIteration(imageFiles, evalRow, partName);
-      }
-    };
-  }
 
   // Upload multiple images with downscaling
   async function uploadImagesToIteration(files, evalRow, partName) {
