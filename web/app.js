@@ -1045,6 +1045,19 @@
     }
   }
 
+  // Sanitize cell values so SheetJS never exceeds Excel's 32,767-char limit
+  function sanitizeExcelCell(val) {
+    if (val === null || val === undefined) return "";
+    let str = typeof val === "object" ? JSON.stringify(val) : String(val);
+    if (str.includes("data:image")) {
+      str = str.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, "[inline-image]");
+    }
+    if (str.length > 32000) {
+      str = str.slice(0, 32000) + "...[truncated]";
+    }
+    return str;
+  }
+
   // Client-side Excel export using SheetJS (0 seconds)
   function exportExcelWorkbook() {
     if (typeof XLSX === "undefined") {
@@ -1052,39 +1065,59 @@
       return;
     }
 
-    const wb = XLSX.utils.book_new();
+    try {
+      const wb = XLSX.utils.book_new();
 
-    // 1. Parts Sheet
-    const cleanParts = partsData.map((p) => ({
-      "Subassembly": p.Subassembly || "",
-      "Part Name": p["Part Name"] || "",
-      "Version": p.Version || "",
-      "Date": p.Date || "",
-      "Weight (g)": parseFloat(p["Weight (g)"] || 0),
-      "Description": p.Description || "",
-      "Specifications": p.Specifications || "",
-      "Image Path": typeof p["Image Path"] === "object" ? JSON.stringify(p["Image Path"]) : (p["Image Path"] || ""),
-      "Stiffness Data": typeof p["Stiffness Data"] === "object" ? JSON.stringify(p["Stiffness Data"]) : (p["Stiffness Data"] || ""),
-      "LC Images": typeof p["LC Images"] === "object" ? JSON.stringify(p["LC Images"]) : (p["LC Images"] || ""),
-      "Tolerancing Data": typeof p["Tolerancing Data"] === "object" ? JSON.stringify(p["Tolerancing Data"]) : (p["Tolerancing Data"] || ""),
-      "Justification": p.Justification || ""
-    }));
-    const wsParts = XLSX.utils.json_to_sheet(cleanParts);
-    XLSX.utils.book_append_sheet(wb, wsParts, "Parts");
+      // 1. Parts Sheet
+      const cleanParts = partsData.map((p) => ({
+        "Subassembly": sanitizeExcelCell(p.Subassembly),
+        "Part Name": sanitizeExcelCell(p["Part Name"]),
+        "Version": sanitizeExcelCell(p.Version),
+        "Date": sanitizeExcelCell(p.Date),
+        "Weight (g)": parseFloat(p["Weight (g)"] || 0),
+        "Description": sanitizeExcelCell(p.Description),
+        "Specifications": sanitizeExcelCell(p.Specifications),
+        "Image Path": sanitizeExcelCell(p["Image Path"]),
+        "Stiffness Data": sanitizeExcelCell(p["Stiffness Data"]),
+        "LC Images": sanitizeExcelCell(p["LC Images"]),
+        "Tolerancing Data": sanitizeExcelCell(p["Tolerancing Data"]),
+        "Justification": sanitizeExcelCell(p.Justification)
+      }));
+      const wsParts = XLSX.utils.json_to_sheet(cleanParts);
+      XLSX.utils.book_append_sheet(wb, wsParts, "Parts");
 
-    // 2. Assemblies Sheet
-    if (assembliesData && assembliesData.length) {
-      const wsAss = XLSX.utils.json_to_sheet(assembliesData);
-      XLSX.utils.book_append_sheet(wb, wsAss, "Assemblies");
+      // 2. Assemblies Sheet
+      if (assembliesData && assembliesData.length) {
+        const cleanAss = assembliesData.map((a) => {
+          const out = {};
+          for (const [k, v] of Object.entries(a)) {
+            out[k] = typeof v === "number" ? v : sanitizeExcelCell(v);
+          }
+          return out;
+        });
+        const wsAss = XLSX.utils.json_to_sheet(cleanAss);
+        XLSX.utils.book_append_sheet(wb, wsAss, "Assemblies");
+      }
+
+      // 3. Requirements Sheet
+      if (requirementsData && requirementsData.length) {
+        const cleanReqs = requirementsData.map((r) => {
+          const out = {};
+          for (const [k, v] of Object.entries(r)) {
+            out[k] = typeof v === "number" ? v : sanitizeExcelCell(v);
+          }
+          return out;
+        });
+        const wsReq = XLSX.utils.json_to_sheet(cleanReqs);
+        XLSX.utils.book_append_sheet(wb, wsReq, "Requirements");
+      }
+
+      XLSX.writeFile(wb, "FST16_DT_Parts_Export.xlsx");
+      showToast("Exported FST16_DT_Parts_Export.xlsx");
+    } catch (err) {
+      console.error("Excel Export Error:", err);
+      alert("Excel Export Error: " + err.message);
     }
-
-    // 3. Requirements Sheet
-    if (requirementsData && requirementsData.length) {
-      const wsReq = XLSX.utils.json_to_sheet(requirementsData);
-      XLSX.utils.book_append_sheet(wb, wsReq, "Requirements");
-    }
-
-    XLSX.writeFile(wb, "FST16_DT_Parts_Export.xlsx");
   }
 
   // Render View Router
@@ -1393,7 +1426,7 @@
         <div class="inline-tab-card">
           <h4 style="margin-bottom: 0.35rem; color: var(--text-muted);">Baseline: ${refAss["Assembly Version"]}</h4>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Total: ${refTotalWeight.toFixed(1)} g | Date: ${refAss.Date || "-"}</div>
-          <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${refAss.Description || "No description recorded."}</p>
+          <p style="font-size: 0.88rem; margin-bottom: 0.75rem; white-space: pre-wrap;">${escapeHtml(refAss.Description || "No description recorded.")}</p>
           <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem; color: var(--text-muted);">Part Breakdown</h5>
           <div class="card-table-wrapper">
             <table class="styled-table">
@@ -1409,7 +1442,7 @@
         <div class="inline-tab-card">
           <h4 style="margin-bottom: 0.35rem; color: var(--accent-red);">Evaluated: ${evalAss["Assembly Version"]}</h4>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Total: ${evalTotalWeight.toFixed(1)} g | Date: ${evalAss.Date || "-"}</div>
-          <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${evalAss.Description || "No description recorded."}</p>
+          <p style="font-size: 0.88rem; margin-bottom: 0.75rem; white-space: pre-wrap;">${escapeHtml(evalAss.Description || "No description recorded.")}</p>
           <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem; color: var(--text-muted);">Part Breakdown</h5>
           <div class="card-table-wrapper">
             <table class="styled-table">
@@ -2124,7 +2157,7 @@
           <div class="inline-tab-card">
             <h4 style="margin-bottom: 0.35rem; color: var(--text-muted);">Baseline: ${formatVersion(refRow.Version)}</h4>
             <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Weight: ${refWeight.toFixed(1)} g | Date: ${refRow.Date || "—"}</div>
-            <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${refRow.Description || "No description recorded."}</p>
+            <p style="font-size: 0.88rem; margin-bottom: 0.75rem; white-space: pre-wrap;">${escapeHtml(refRow.Description || "No description recorded.")}</p>
             <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem;">Specifications</h5>
             <div class="card-table-wrapper" style="margin-bottom: 0.75rem;">
               <table class="styled-table"><tbody>${renderSpecsRows(refRow.Specifications)}</tbody></table>
@@ -2134,7 +2167,7 @@
           <div class="inline-tab-card">
             <h4 style="margin-bottom: 0.35rem; color: var(--accent-red);">Evaluated: ${formatVersion(evalRow.Version)}</h4>
             <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem;">Weight: ${evalWeight.toFixed(1)} g | Date: ${evalRow.Date || "—"}</div>
-            <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${evalRow.Description || "No description recorded."}</p>
+            <p style="font-size: 0.88rem; margin-bottom: 0.75rem; white-space: pre-wrap;">${escapeHtml(evalRow.Description || "No description recorded.")}</p>
             <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem;">Specifications</h5>
             <div class="card-table-wrapper" style="margin-bottom: 0.75rem;">
               <table class="styled-table"><tbody>${renderSpecsRows(evalRow.Specifications)}</tbody></table>
@@ -2146,7 +2179,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; margin-top: 1.5rem;">
           <div class="inline-tab-card">
             <h4 style="margin-bottom: 0.5rem;">Specifications</h4>
-            <p style="font-size: 0.88rem; margin-bottom: 0.75rem;">${evalRow.Description || "—"}</p>
+            <p style="font-size: 0.88rem; margin-bottom: 0.75rem; white-space: pre-wrap;">${escapeHtml(evalRow.Description || "—")}</p>
             <div class="card-table-wrapper">
               <table class="styled-table"><tbody>${renderSpecsRows(evalRow.Specifications)}</tbody></table>
             </div>
@@ -2295,7 +2328,7 @@
 
           <div class="form-group">
             <label for="newIterDesc">Description</label>
-            <input type="text" id="newIterDesc" class="form-input" placeholder="Summary of changes" value="${escapeHtml(newIterDraft.desc)}" oninput="newIterDraft.desc = this.value; window.markUnsaved(true)">
+            <textarea id="newIterDesc" class="form-textarea" rows="3" placeholder="Summary of changes (Press Enter for new lines)" oninput="newIterDraft.desc = this.value; window.markUnsaved(true)">${escapeHtml(newIterDraft.desc)}</textarea>
           </div>
 
           <div class="form-group">
@@ -2432,7 +2465,7 @@
 
           <div class="form-group">
             <label for="editIterDesc">Description</label>
-            <input type="text" id="editIterDesc" class="form-input" value="${escapeHtml(evalRow.Description || "")}" oninput="window.markUnsaved(true)">
+            <textarea id="editIterDesc" class="form-textarea" rows="3" oninput="window.markUnsaved(true)">${escapeHtml(evalRow.Description || "")}</textarea>
           </div>
 
           <div class="form-group">
@@ -3192,8 +3225,8 @@
                 <button type="button" class="btn-action" onclick="window.openLightbox('${activeSrc}')">Zoom</button>
               </div>
             </div>
-            <div class="gallery-viewport" style="min-height: 340px; max-height: 480px; cursor: pointer;" onclick="window.toggleFeaFlipSource()" title="Click image to flip between Baseline and Evaluated">
-              <img src="${activeSrc}" data-rawpath="${activeRaw}" alt="${activeLabel}" onerror="window.handleImageFallback(this, '${activeRaw}')" class="gallery-main-img">
+            <div class="gallery-viewport" style="min-height: 300px; padding: 0.5rem; cursor: pointer;" onclick="window.toggleFeaFlipSource()" title="Click image to flip between Baseline and Evaluated">
+              <img src="${activeSrc}" data-rawpath="${activeRaw}" alt="${activeLabel}" onerror="window.handleImageFallback(this, '${activeRaw}')" class="gallery-main-img" style="max-height: 500px; max-width: 100%; width: auto; height: auto; object-fit: contain;">
             </div>
           </div>
         `;
@@ -3204,16 +3237,16 @@
               <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
                 Baseline: ${formatVersion(refRow.Version)} (${activeFeaLc})
               </div>
-              <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
-                <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc} Baseline" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img">
+              <div class="gallery-viewport" style="min-height: 260px; padding: 0.5rem;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+                <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc} Baseline" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img" style="max-height: 440px; max-width: 100%; width: auto; height: auto; object-fit: contain;">
               </div>
             </div>
             <div class="card-table-wrapper" style="padding: 0.75rem; text-align: center;">
               <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">
                 Evaluated: ${formatVersion(evalRow.Version)} (${activeFeaLc})
               </div>
-              <div class="gallery-viewport" style="min-height: 280px; max-height: 380px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
-                <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc} Evaluated" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img">
+              <div class="gallery-viewport" style="min-height: 260px; padding: 0.5rem;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+                <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc} Evaluated" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img" style="max-height: 440px; max-width: 100%; width: auto; height: auto; object-fit: contain;">
               </div>
             </div>
           </div>
@@ -3225,8 +3258,8 @@
           <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
             ${formatVersion(evalRow.Version)} (${activeFeaLc})
           </div>
-          <div class="gallery-viewport" style="min-height: 320px; max-height: 480px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
-            <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc}" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img">
+          <div class="gallery-viewport" style="min-height: 300px; padding: 0.5rem;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+            <img src="${cleanEval}" data-rawpath="${evalImg}" alt="${activeFeaLc}" onerror="window.handleImageFallback(this, '${evalImg}')" class="gallery-main-img" style="max-height: 500px; max-width: 100%; width: auto; height: auto; object-fit: contain;">
           </div>
         </div>
       `;
@@ -3236,8 +3269,8 @@
           <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
             ${formatVersion(refRow.Version)} (${activeFeaLc})
           </div>
-          <div class="gallery-viewport" style="min-height: 320px; max-height: 480px;" onclick="window.openLightbox(this.querySelector('img')?.src)">
-            <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc}" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img">
+          <div class="gallery-viewport" style="min-height: 300px; padding: 0.5rem;" onclick="window.openLightbox(this.querySelector('img')?.src)">
+            <img src="${cleanRef}" data-rawpath="${refImg}" alt="${activeFeaLc}" onerror="window.handleImageFallback(this, '${refImg}')" class="gallery-main-img" style="max-height: 500px; max-width: 100%; width: auto; height: auto; object-fit: contain;">
           </div>
         </div>
       `;
@@ -3539,7 +3572,7 @@
           </div>
           <div class="form-group">
             <label for="inputNewDesc">Description</label>
-            <input type="text" id="inputNewDesc" class="form-input" placeholder="Iteration description" value="${latest.Description || ""}">
+            <textarea id="inputNewDesc" class="form-textarea" rows="3" placeholder="Iteration description">${escapeHtml(latest.Description || "")}</textarea>
           </div>
           <div class="form-group">
             <label for="inputNewSpecs">Specifications</label>
@@ -3684,7 +3717,7 @@
           </div>
           <div class="form-group">
             <label for="editDesc">Description</label>
-            <input type="text" id="editDesc" class="form-input" value="${row.Description || ""}">
+            <textarea id="editDesc" class="form-textarea" rows="3">${escapeHtml(row.Description || "")}</textarea>
           </div>
           <div class="form-group">
             <label for="editSpecs">Specifications</label>
@@ -3802,7 +3835,7 @@
           </div>
           <div class="form-group">
             <label for="newPartDesc">Description</label>
-            <input type="text" id="newPartDesc" class="form-input" placeholder="Part description">
+            <textarea id="newPartDesc" class="form-textarea" rows="3" placeholder="Part description"></textarea>
           </div>
           <div class="form-group">
             <label for="newPartSpecs">Specifications</label>
@@ -4315,7 +4348,7 @@
 
                 <div class="form-group" style="margin-bottom: 0.75rem;">
                   <label for="inpAssDescription">Description</label>
-                  <input type="text" id="inpAssDescription" class="form-input" placeholder="Technical purpose and differences of this assembly" value="${curr.Description || ""}">
+                  <textarea id="inpAssDescription" class="form-textarea" rows="2" placeholder="Technical purpose and differences of this assembly">${escapeHtml(curr.Description || "")}</textarea>
                 </div>
 
                 <!-- Live Mass Status Banner -->

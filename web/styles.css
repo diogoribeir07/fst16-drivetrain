@@ -719,19 +719,21 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  min-height: 380px;
-  max-height: 540px;
+  min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   cursor: zoom-in;
-  padding: 1rem;
+  padding: 0.75rem;
 }
 
 .gallery-main-img {
+  display: block;
   max-width: 100%;
   max-height: 500px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: var(--radius-sm);
   transition: transform 0.2s ease;
