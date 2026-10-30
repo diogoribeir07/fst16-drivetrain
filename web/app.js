@@ -812,19 +812,6 @@
     if (!iters.length) return;
     const evalRow = iters.find((p) => String(p.Version) === String(selectedEvalVersion)) || iters[iters.length - 1];
     const refRow = iters.find((p) => String(p.Version) === String(selectedRefVersion)) || iters[0];
-
-    const evalKey = `${partName}__${evalRow.Version}`;
-    if (editStagedPartVer !== evalKey) {
-      editStagedPartVer = evalKey;
-      editIterSchematics = [...parseImagePaths(evalRow["Image Path"])];
-      editIterLcImages = {};
-    }
-    if (newIterDraft.part !== partName) {
-      newIterDraft = { part: partName, weight: "", desc: "", specs: "", stiff: {} };
-      newIterSchematics = [];
-      newIterLcImages = {};
-    }
-    const baseVerForDelta = getDefaultBaseline(partName, iters);
     let md = "";
 
     if (type === "mass") {
@@ -833,9 +820,7 @@
       const diff = ew - rw;
       const pct = rw > 0 ? ((diff / rw) * 100).toFixed(1) : "0.0";
       const sign = diff > 0 ? "+" : "";
-      md = `| Metric | ${formatVersion(evalRow.Version)} | ${formatVersion(refRow.Version)} | Diff ($\Delta\text{ g}$) | $\Delta\%$ |
-| :--- | :---: | :---: | :---: | :---: |
-| **Total Weight** | $${ew.toFixed(1)}\text{ g}$ | $${rw.toFixed(1)}\text{ g}$ | **$${sign}${diff.toFixed(1)}\text{ g}$** | **$${sign}${pct}\%$** |`;
+      md = `| Metric | ${formatVersion(evalRow.Version)} | ${formatVersion(refRow.Version)} | Diff ($\\Delta\\text{ g}$) | $\\Delta\\%$ |\n| :--- | :---: | :---: | :---: | :---: |\n| **Total Weight** | $${ew.toFixed(1)}\\text{ g}$ | $${rw.toFixed(1)}\\text{ g}$ | **$${sign}${diff.toFixed(1)}\\text{ g}$** | **$${sign}${pct}\\%$** |`;
     } else {
       let evalStiff = {}, refStiff = {};
       try {
@@ -844,17 +829,14 @@
       } catch (e) {}
       const decimals = partName === "HB_01" ? 5 : 4;
       const descMap = { LC1: "Pure Braking", LC2: "Pure Acceleration", LC3: "Pure Cornering", LC4: "Braking + Cornering 1", LC5: "Braking + Cornering 2", LC6: "Acceleration + Cornering 1", LC7: "Acceleration + Cornering 2", LC8: "1kN Fy", LC9: "-1kN Fy" };
-      md = `| Load Case | Description | ${formatVersion(evalRow.Version)} ($\text{mm}$) | ${formatVersion(refRow.Version)} ($\text{mm}$) | $\Delta\text{ (mm)}$ | $\Delta\%$ |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-`;
+      md = `| Load Case | Description | ${formatVersion(evalRow.Version)} ($\\text{mm}$) | ${formatVersion(refRow.Version)} ($\\text{mm}$) | $\\Delta\\text{ (mm)}$ | $\\Delta\\%$ |\n| :--- | :--- | :---: | :---: | :---: | :---: |\n`;
       ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"].forEach((lc) => {
         const eVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : parseFloat(evalStiff[lc] || 0);
         const rVal = typeof refStiff[lc] === "object" ? refStiff[lc].disp : parseFloat(refStiff[lc] || 0);
         const diff = eVal - rVal;
         const pct = rVal > 0 ? ((diff / rVal) * 100).toFixed(1) : "0.0";
         const sign = diff > 0 ? "+" : "";
-        md += `| **${lc}** | ${descMap[lc] || lc} | $${eVal.toFixed(decimals)}$ | $${rVal.toFixed(decimals)}$ | **$${sign}${diff.toFixed(decimals)}$** | **$${sign}${pct}\%$** |
-`;
+        md += `| **${lc}** | ${descMap[lc] || lc} | $${eVal.toFixed(decimals)}$ | $${rVal.toFixed(decimals)}$ | **$${sign}${diff.toFixed(decimals)}$** | **$${sign}${pct}\\%$** |\n`;
       });
     }
 
@@ -1957,6 +1939,19 @@
     const evalRow = iters.find((p) => String(p.Version) === String(selectedEvalVersion)) || iters[iters.length - 1];
     const refRow = iters.find((p) => String(p.Version) === String(selectedRefVersion)) || iters[0];
 
+    const evalKey = `${partName}__${evalRow.Version}`;
+    if (editStagedPartVer !== evalKey) {
+      editStagedPartVer = evalKey;
+      editIterSchematics = [...parseImagePaths(evalRow["Image Path"])];
+      editIterLcImages = {};
+    }
+    if (newIterDraft.part !== partName) {
+      newIterDraft = { part: partName, weight: "", desc: "", specs: "", stiff: {} };
+      newIterSchematics = [];
+      newIterLcImages = {};
+    }
+    const baseVerForDelta = getDefaultBaseline(partName, iters);
+
     const evalWeight = parseFloat(evalRow["Weight (g)"]) || 0;
     const refWeight = parseFloat(refRow["Weight (g)"]) || 0;
     const weightDiff = evalWeight - refWeight;
@@ -3050,7 +3045,55 @@
         lcKeys = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
       } else {
         const fallbackMsg = `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0 0.5rem;">
+          <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">FEA Displacements</h3>
+          <p style="color: var(--text-dim); font-size: 0.88rem;">No FEA load-case displacement data recorded for this iteration.</p>
+        `;
+        return showFull ? fallbackMsg + renderFeaScreenshots(evalRow, refRow) : fallbackMsg;
+      }
+    }
+
+    const descMap = {
+      LC1: "Pure Braking",
+      LC2: "Pure Acceleration",
+      LC3: "Pure Cornering",
+      LC4: "Braking + Cornering 1",
+      LC5: "Braking + Cornering 2",
+      LC6: "Acceleration + Cornering 1",
+      LC7: "Acceleration + Cornering 2",
+      LC8: "1kN Fy",
+      LC9: "-1kN Fy"
+    };
+
+    const isHB = evalRow["Part Name"] === "HB_01";
+    const decimals = isHB ? 5 : 4;
+
+    let rowsHtml = "";
+    lcKeys.forEach((lc) => {
+      const eVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : parseFloat(evalStiff[lc] || 0);
+      const rVal = typeof refStiff[lc] === "object" ? refStiff[lc].disp : parseFloat(refStiff[lc] || 0);
+      const diff = eVal - rVal;
+      const pct = rVal > 0 ? (diff / rVal) * 100 : 0;
+      const isZero = Math.abs(diff) < 1e-7;
+      const deltaClass = isZero ? "delta-neutral" : (diff < 0 ? "delta-good" : "delta-bad");
+
+      rowsHtml += `
+        <tr>
+          <td><strong>${lc}</strong></td>
+          <td style="color: var(--text-muted); font-size: 0.82rem;">${descMap[lc] || lc}</td>
+          <td class="mono">${eVal.toFixed(decimals)} mm</td>
+          <td class="mono">${rVal.toFixed(decimals)} mm</td>
+          <td class="mono ${deltaClass}">
+            <strong>${isZero ? "0.0" : (diff <= 0 ? "" : "+")}${diff.toFixed(decimals)} mm</strong>
+          </td>
+          <td class="mono ${deltaClass}">
+            <strong>${isZero ? "0.0%" : (diff <= 0 ? "" : "+") + pct.toFixed(1) + "%"}</strong>
+          </td>
+        </tr>
+      `;
+    });
+
+    let html = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0 0.5rem;">
         <h3 style="font-size: 1rem; margin: 0;">FEA Displacements</h3>
         <button type="button" class="btn-copy-md" onclick="window.copyTableMarkdown(this, 'fea', '${evalRow["Part Name"]}')">Copy Table</button>
       </div>
