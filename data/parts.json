@@ -845,7 +845,7 @@
     "Version": "6.2.3",
     "Date": "2026-10-31 00:00:24",
     "Weight (g)": 516.52,
-    "Description": "",
+    "Description": "-The offset of the backrib cut went back to the 4mm\n-The back ribs distances passed to 3-6-3",
     "Specifications": "",
     "Image Path": "[\"images/HB_01_v6_2_3_20261031000024_sch1.png\",\"images/HB_01_v6_2_3_20261031000024_sch2.png\",\"images/HB_01_v6_2_3_20261031000024_sch3.png\"]",
     "Stiffness Data": "{\"LC1\":0,\"LC2\":0,\"LC3\":0,\"LC4\":0,\"LC5\":0,\"LC6\":0,\"LC7\":0,\"LC8\":0,\"LC9\":0}",
