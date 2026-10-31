@@ -848,8 +848,8 @@
     "Description": "-The offset of the backrib cut went back to the 4mm\n-The back ribs distances passed to 3-6-3",
     "Specifications": "",
     "Image Path": "[\"images/HB_01_v6_2_3_20261031000024_sch1.png\",\"images/HB_01_v6_2_3_20261031000024_sch2.png\",\"images/HB_01_v6_2_3_20261031000024_sch3.png\"]",
-    "Stiffness Data": "{\"LC1\":0,\"LC2\":0,\"LC3\":0,\"LC4\":0,\"LC5\":0,\"LC6\":0,\"LC7\":0,\"LC8\":0,\"LC9\":0}",
-    "LC Images": null,
+    "Stiffness Data": "{\"LC1\":0,\"LC2\":0,\"LC3\":0.14285,\"LC4\":0,\"LC5\":0,\"LC6\":0,\"LC7\":0,\"LC8\":0.03164,\"LC9\":0.03164}",
+    "LC Images": "{\"LC8\":\"images/HB_01_v6_2_3_LC8_20261031001220.png\",\"LC9\":\"images/HB_01_v6_2_3_LC9_20261031001220.png\",\"LC3\":\"images/HB_01_v6_2_3_LC3_20261031001220.png\"}",
     "Tolerancing Data": null,
     "Justification": null
   }
