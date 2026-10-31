@@ -936,5 +936,19 @@
     "LC Images": "{\"LC1\":\"images/UP_05_v7_0_2_LC1_20261031183253.png\",\"LC2\":\"images/UP_05_v7_0_2_LC2_20261031183253.png\",\"LC3\":\"images/UP_05_v7_0_2_LC3_20261031183253.png\",\"LC4\":\"images/UP_05_v7_0_2_LC4_20261031183253.png\",\"LC5\":\"images/UP_05_v7_0_2_LC5_20261031183253.png\",\"LC6\":\"images/UP_05_v7_0_2_LC6_20261031183253.png\"}",
     "Tolerancing Data": null,
     "Justification": "FST15 baseline Camber Bracket FEM assessment from FEM_Report_DT_UP_05_F.pptx."
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_05",
+    "Version": "7.0.3",
+    "Date": "2026-10-31 18:52:02",
+    "Weight (g)": 44.44,
+    "Description": "Corrected the middle fillet\nFinal Version",
+    "Specifications": "Distance Between Bolts: 30mm",
+    "Image Path": "[\"images/UP_05_v7_0_3_20261031185202_sch1.png\",\"images/UP_05_v7_0_3_20261031185202_sch2.png\"]",
+    "Stiffness Data": "{\"LC1\":0.28379,\"LC2\":0.45944,\"LC3\":0.51916,\"LC4\":0.5312,\"LC5\":0.50392,\"LC6\":0.39957}",
+    "LC Images": "{\"LC1\":\"images/UP_05_v7_0_3_LC1_20261031185202.png\",\"LC2\":\"images/UP_05_v7_0_3_LC2_20261031185202.png\",\"LC3\":\"images/UP_05_v7_0_3_LC3_20261031185202.png\",\"LC4\":\"images/UP_05_v7_0_3_LC4_20261031185202.png\",\"LC5\":\"images/UP_05_v7_0_3_LC5_20261031185202.png\",\"LC6\":\"images/UP_05_v7_0_3_LC6_20261031185202.png\"}",
+    "Tolerancing Data": null,
+    "Justification": "FST15 baseline Camber Bracket FEM assessment from FEM_Report_DT_UP_05_F.pptx."
   }
 ]
