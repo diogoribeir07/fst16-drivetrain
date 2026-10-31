@@ -922,5 +922,19 @@
     "LC Images": "{\"LC1\":\"images/UP_05_v7_0_1_LC1_20261031173544.png\",\"LC2\":\"images/UP_05_v7_0_1_LC2_20261031173544.png\",\"LC4\":\"images/UP_05_v7_0_1_LC4_20261031173544.png\",\"LC5\":\"images/UP_05_v7_0_1_LC5_20261031173544.png\",\"LC6\":\"images/UP_05_v7_0_1_LC6_20261031173544.png\"}",
     "Tolerancing Data": null,
     "Justification": "FST15 baseline Camber Bracket FEM assessment from FEM_Report_DT_UP_05_F.pptx."
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_05",
+    "Version": "7.0.2",
+    "Date": "2026-10-31 18:32:53",
+    "Weight (g)": 44.36,
+    "Description": "Changed the height of the mid body to 12.5mm to the centerline of th eshoulder bolt to have clearence",
+    "Specifications": "Distance between Bolts: 30mm",
+    "Image Path": "[\"images/UP_05_v7_0_2_20261031183253_sch1.png\",\"images/UP_05_v7_0_2_20261031183253_sch2.png\"]",
+    "Stiffness Data": "{\"LC1\":0.29647,\"LC2\":0.46312,\"LC3\":0.56552,\"LC4\":0.54454,\"LC5\":0.51246,\"LC6\":0.42472}",
+    "LC Images": "{\"LC1\":\"images/UP_05_v7_0_2_LC1_20261031183253.png\",\"LC2\":\"images/UP_05_v7_0_2_LC2_20261031183253.png\",\"LC3\":\"images/UP_05_v7_0_2_LC3_20261031183253.png\",\"LC4\":\"images/UP_05_v7_0_2_LC4_20261031183253.png\",\"LC5\":\"images/UP_05_v7_0_2_LC5_20261031183253.png\",\"LC6\":\"images/UP_05_v7_0_2_LC6_20261031183253.png\"}",
+    "Tolerancing Data": null,
+    "Justification": "FST15 baseline Camber Bracket FEM assessment from FEM_Report_DT_UP_05_F.pptx."
   }
 ]
