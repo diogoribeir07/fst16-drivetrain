@@ -908,5 +908,19 @@
     "LC Images": "{\"LC1\":\"images/UP_05_vFST15_LC1_20261031163947.png\",\"LC2\":\"images/UP_05_vFST15_LC2_20261031163947.png\",\"LC3\":\"images/UP_05_vFST15_LC3_20261031163947.png\",\"LC4\":\"images/UP_05_vFST15_LC4_20261031163947.png\",\"LC5\":\"images/UP_05_vFST15_LC5_20261031163947.png\",\"LC6\":\"images/UP_05_vFST15_LC6_20261031163947.png\"}",
     "Tolerancing Data": null,
     "Justification": "FST15 baseline Camber Bracket FEM assessment from FEM_Report_DT_UP_05_F.pptx."
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_05",
+    "Version": "7.0.1",
+    "Date": "2026-10-31 17:35:44",
+    "Weight (g)": 0,
+    "Description": "A general redesign",
+    "Specifications": "",
+    "Image Path": "[\"images/UP_05_v7_0_1_20261031173544_sch1.png\",\"images/UP_05_v7_0_1_20261031173544_sch2.png\",\"images/UP_05_v7_0_1_20261031173544_sch3.png\"]",
+    "Stiffness Data": "{\"LC1\":0.22869,\"LC2\":0.37315,\"LC3\":0.505,\"LC4\":0.43351,\"LC5\":0.39582,\"LC6\":0.38255}",
+    "LC Images": "{\"LC1\":\"images/UP_05_v7_0_1_LC1_20261031173544.png\",\"LC2\":\"images/UP_05_v7_0_1_LC2_20261031173544.png\",\"LC4\":\"images/UP_05_v7_0_1_LC4_20261031173544.png\",\"LC5\":\"images/UP_05_v7_0_1_LC5_20261031173544.png\",\"LC6\":\"images/UP_05_v7_0_1_LC6_20261031173544.png\"}",
+    "Tolerancing Data": null,
+    "Justification": "FST15 baseline Camber Bracket FEM assessment from FEM_Report_DT_UP_05_F.pptx."
   }
 ]
