@@ -838,5 +838,19 @@
     "LC Images": "{\"LC1\":\"images/HB_01_v6_2_2_LC1_20261030234723.png\",\"LC2\":\"images/HB_01_v6_2_2_LC2_20261030235251.png\",\"LC3\":\"images/HB_01_v6_2_2_LC3_20261030234723.png\",\"LC4\":\"images/HB_01_v6_2_2_LC4_20261030234723.png\",\"LC5\":\"images/HB_01_v6_2_2_LC5_20261030234723.png\",\"LC6\":\"images/HB_01_v6_2_2_LC6_20261030235251.png\",\"LC7\":\"images/HB_01_v6_2_2_LC7_20261030235251.png\",\"LC8\":\"images/HB_01_v6_2_2_LC8_20261030234723.png\",\"LC9\":\"images/HB_01_v6_2_2_LC9_20261030234723.png\"}",
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "HB",
+    "Part Name": "HB_01",
+    "Version": "6.2.3",
+    "Date": "2026-10-31 00:00:24",
+    "Weight (g)": 516.52,
+    "Description": "",
+    "Specifications": "",
+    "Image Path": "[\"images/HB_01_v6_2_3_20261031000024_sch1.png\",\"images/HB_01_v6_2_3_20261031000024_sch2.png\",\"images/HB_01_v6_2_3_20261031000024_sch3.png\"]",
+    "Stiffness Data": "{\"LC1\":0,\"LC2\":0,\"LC3\":0,\"LC4\":0,\"LC5\":0,\"LC6\":0,\"LC7\":0,\"LC8\":0,\"LC9\":0}",
+    "LC Images": null,
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
