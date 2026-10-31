@@ -104,8 +104,21 @@ def extract_ntop_fea_from_image(pil_img, target_part=None):
         nospace = first_lines.replace(" ", "")
 
         detected_lc = None
-        # Load Case detection: support UP_01 and HB_01 matchers
-        if "pure" in first_lines and "brak" in first_lines:
+        # Load Case detection: support UP_01, HB_01 and UP_05 matchers
+        if target_part == "UP_05":
+            if "compress" in first_lines or "compression" in nospace:
+                detected_lc = "LC1"
+            elif "tract" in first_lines or "traction" in nospace:
+                detected_lc = "LC2"
+            elif "down" in first_lines or "fulldown" in nospace:
+                detected_lc = "LC3"
+            elif "up" in first_lines or "fullup" in nospace:
+                detected_lc = "LC4"
+            elif "rear" in first_lines or "fullrear" in nospace:
+                detected_lc = "LC5"
+            elif "front" in first_lines or "fullfront" in nospace:
+                detected_lc = "LC6"
+        elif "pure" in first_lines and "brak" in first_lines:
             detected_lc = "LC1"
         elif "pure" in first_lines and "acc" in first_lines:
             detected_lc = "LC2"
@@ -119,7 +132,7 @@ def extract_ntop_fea_from_image(pil_img, target_part=None):
             detected_lc = "LC7"
         elif "a+c1" in nospace or "a+c_1" in nospace or "a+c" in nospace or ("acc" in first_lines and ("corn" in first_lines or "com" in first_lines)):
             detected_lc = "LC6"
-        elif target_part != "HB_01":
+        elif target_part not in ["HB_01", "UP_05"]:
             if "-1kn" in nospace or "-ikn" in nospace or "result_2" in nospace or "result-2" in nospace:
                 detected_lc = "LC9"
             elif "1kn" in nospace or "ikn" in nospace:
@@ -134,7 +147,7 @@ def extract_ntop_fea_from_image(pil_img, target_part=None):
         detected_disp = None
         if nums:
             raw_max = nums[0]
-            part_decimals = 5 if target_part == "HB_01" else 4
+            part_decimals = 5 if target_part in ["HB_01", "UP_05"] else 4
             factor = 10 ** part_decimals
             detected_disp = math.floor(raw_max * factor + 1e-9) / factor
 
@@ -424,6 +437,24 @@ FEA_PARTS_CONFIG = {
         "DEFAULT_FST16": {
             "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0,
             "LC5": 0.0, "LC6": 0.0, "LC7": 0.0, "LC8": 0.0, "LC9": 0.0
+        }
+    },
+    "UP_05": {
+        "DECIMALS": 5,
+        "LC_KEYS": ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6"],
+        "LC_INFO": {
+            "LC1": {"desc": "Compression", "ref_fst15": 0.1553, "default_fst16": None},
+            "LC2": {"desc": "Traction", "ref_fst15": 0.4047, "default_fst16": None},
+            "LC3": {"desc": "Full Down", "ref_fst15": 0.3986, "default_fst16": None},
+            "LC4": {"desc": "Full Up", "ref_fst15": 0.3746, "default_fst16": None},
+            "LC5": {"desc": "Full Rear", "ref_fst15": 0.3889, "default_fst16": None},
+            "LC6": {"desc": "Full Front", "ref_fst15": 0.2887, "default_fst16": None},
+        },
+        "DEFAULT_FST15": {
+            "LC1": 0.1553, "LC2": 0.4047, "LC3": 0.3986, "LC4": 0.3746, "LC5": 0.3889, "LC6": 0.2887
+        },
+        "DEFAULT_FST16": {
+            "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0, "LC5": 0.0, "LC6": 0.0
         }
     }
 }
@@ -1636,7 +1667,7 @@ elif st.session_state.current_page == "Part Management":
             latest_iter = part_data.iloc[-1]
             subassembly = latest_iter['Subassembly']
             is_oem = (subassembly == "Other") or (str(selected_part) in ["61815", "61816", "71815-TN", "71816-TN", "85X100X9 HMSA10 V", "95X110X9 HMSA10 V"])
-            is_structural = (str(selected_part) in ["UP_01", "UP_02", "UpperSupport Version", "HB_01"])
+            is_structural = (str(selected_part) in ["UP_01", "UP_02", "UpperSupport Version", "HB_01", "UP_05"])
 
             if f"pending_eval_{selected_part}" in st.session_state:
                 st.session_state[f"comp_eval_{selected_part}"] = st.session_state.pop(f"pending_eval_{selected_part}")

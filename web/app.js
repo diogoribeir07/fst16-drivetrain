@@ -191,6 +191,65 @@
     }, duration);
   }
 
+  // Central FEA configuration per part
+  function getPartFeaConfig(partName) {
+    if (partName === "HB_01") {
+      return {
+        isFea: true,
+        decimals: 5,
+        step: "0.00001",
+        lcs: ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"],
+        descMap: {
+          LC1: "Pure Braking",
+          LC2: "Pure Acceleration",
+          LC3: "Pure Cornering",
+          LC4: "Braking + Cornering 1",
+          LC5: "Braking + Cornering 2",
+          LC6: "Acceleration + Cornering 1",
+          LC7: "Acceleration + Cornering 2",
+          LC8: "1kN Fy",
+          LC9: "-1kN Fy"
+        }
+      };
+    }
+    if (partName === "UP_01") {
+      return {
+        isFea: true,
+        decimals: 4,
+        step: "0.0001",
+        lcs: ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"],
+        descMap: {
+          LC1: "Pure Braking",
+          LC2: "Pure Acceleration",
+          LC3: "Pure Cornering",
+          LC4: "Braking + Cornering 1",
+          LC5: "Braking + Cornering 2",
+          LC6: "Acceleration + Cornering 1",
+          LC7: "Acceleration + Cornering 2",
+          LC8: "1kN Fy",
+          LC9: "-1kN Fy"
+        }
+      };
+    }
+    if (partName === "UP_05") {
+      return {
+        isFea: true,
+        decimals: 5,
+        step: "0.00001",
+        lcs: ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6"],
+        descMap: {
+          LC1: "Compression",
+          LC2: "Traction",
+          LC3: "Full Down",
+          LC4: "Full Up",
+          LC5: "Full Rear",
+          LC6: "Full Front"
+        }
+      };
+    }
+    return null;
+  }
+
   // Preprocess image on canvas and run OCR via Tesseract.js
   async function extractNtopFeaFromImage(fileOrDataUrl, targetPart) {
     if (typeof Tesseract === "undefined") {
@@ -250,11 +309,30 @@
 
           let detectedLc = null;
 
+          // 0. Dedicated UP_05 matchers
+          if (targetPart === "UP_05") {
+            if (firstLines.includes("compress") || nospace.includes("compression")) {
+              detectedLc = "LC1";
+            } else if (firstLines.includes("tract") || nospace.includes("traction")) {
+              detectedLc = "LC2";
+            } else if (firstLines.includes("down") || nospace.includes("fulldown")) {
+              detectedLc = "LC3";
+            } else if (firstLines.includes("up") || nospace.includes("fullup")) {
+              detectedLc = "LC4";
+            } else if (firstLines.includes("rear") || nospace.includes("fullrear")) {
+              detectedLc = "LC5";
+            } else if (firstLines.includes("front") || nospace.includes("fullfront")) {
+              detectedLc = "LC6";
+            }
+          }
+
           // 1. Direct explicit LC tag (e.g. "LC5", "LoadCase8", "Load Case 9")
           const mDirect = firstLines.match(/\b(?:lc|load\s*case)\s*([1-9])\b/i);
           if (mDirect) {
             const num = parseInt(mDirect[1], 10);
-            detectedLc = `LC${num}`;
+            if (targetPart !== "UP_05" || num <= 6) {
+              detectedLc = `LC${num}`;
+            }
           }
 
           // 2. Unit Lateral Load Cases (LC8: 1kN Fy, LC9: -1kN Fy)
@@ -390,8 +468,8 @@
             }
           }
           let detectedDisp = null;
-          const isHB = targetPart === "HB_01";
-          const partDecimals = isHB ? 5 : 4;
+          const feaCfg = getPartFeaConfig(targetPart);
+          const partDecimals = feaCfg ? feaCfg.decimals : 4;
 
           if (nums.length) {
             const rawMax = nums[0]; // Top value of legend scale is peak displacement
@@ -449,8 +527,8 @@
   // Handle OCR from pasted or dropped image
   async function handleFeaScreenshotPasted(fileOrDataUrl, targetPart, mode = "new") {
     const res = await extractNtopFeaFromImage(fileOrDataUrl, targetPart);
-    const isHB = targetPart === "HB_01";
-    const partDecimals = isHB ? 5 : 4;
+    const feaCfg = getPartFeaConfig(targetPart);
+    const partDecimals = feaCfg ? feaCfg.decimals : 4;
 
     if (res.detectedLc && res.detectedDisp !== null) {
       const formattedVal = res.detectedDisp.toFixed(partDecimals);
@@ -761,11 +839,11 @@
       }
     }
 
-    const isHB = partName === "HB_01";
-    const isUP = partName === "UP_01";
-    if (!isHB && !isUP) return;
-    const lcs = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
-    const decimals = isHB ? 5 : 4;
+    const feaCfg = getPartFeaConfig(partName);
+    if (!feaCfg) return;
+    const lcs = feaCfg.lcs;
+    const decimals = feaCfg.decimals;
+    const totalLcs = lcs.length;
     let filledCount = 0;
 
     lcs.forEach((lc) => {
@@ -798,11 +876,11 @@
     const progFill = document.getElementById(`${mode}LcProgressFill`);
     const progText = document.getElementById(`${mode}LcProgressText`);
     if (progFill && progText) {
-      const pct = Math.round((filledCount / 9) * 100);
+      const pct = Math.round((filledCount / totalLcs) * 100);
       progFill.style.width = `${pct}%`;
-      progFill.classList.toggle("complete", filledCount === 9);
-      progText.textContent = `${filledCount} / 9 LCs`;
-      progText.style.color = filledCount === 9 ? "var(--delta-green)" : "var(--text-muted)";
+      progFill.classList.toggle("complete", filledCount === totalLcs);
+      progText.textContent = `${filledCount} / ${totalLcs} LCs`;
+      progText.style.color = filledCount === totalLcs ? "var(--delta-green)" : "var(--text-muted)";
     }
   };
 
@@ -827,10 +905,11 @@
         if (evalRow["Stiffness Data"]) evalStiff = JSON.parse(evalRow["Stiffness Data"]);
         if (refRow["Stiffness Data"]) refStiff = JSON.parse(refRow["Stiffness Data"]);
       } catch (e) {}
-      const decimals = partName === "HB_01" ? 5 : 4;
-      const descMap = { LC1: "Pure Braking", LC2: "Pure Acceleration", LC3: "Pure Cornering", LC4: "Braking + Cornering 1", LC5: "Braking + Cornering 2", LC6: "Acceleration + Cornering 1", LC7: "Acceleration + Cornering 2", LC8: "1kN Fy", LC9: "-1kN Fy" };
+      const feaCfg = getPartFeaConfig(partName) || { decimals: 4, lcs: ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"], descMap: {} };
+      const decimals = feaCfg.decimals;
+      const descMap = feaCfg.descMap;
       md = `| Load Case | Description | ${formatVersion(evalRow.Version)} ($\\text{mm}$) | ${formatVersion(refRow.Version)} ($\\text{mm}$) | $\\Delta\\text{ (mm)}$ | $\\Delta\\%$ |\n| :--- | :--- | :---: | :---: | :---: | :---: |\n`;
-      ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"].forEach((lc) => {
+      feaCfg.lcs.forEach((lc) => {
         const eVal = typeof evalStiff[lc] === "object" ? evalStiff[lc].disp : parseFloat(evalStiff[lc] || 0);
         const rVal = typeof refStiff[lc] === "object" ? refStiff[lc].disp : parseFloat(refStiff[lc] || 0);
         const diff = eVal - rVal;
@@ -1255,6 +1334,7 @@
       { key: "UP_02", label: "Upright Lid", sub: "UP" },
       { key: "UP_03", label: "Front Plate", sub: "UP" },
       { key: "UP_04", label: "Backplate", sub: "UP" },
+      { key: "UP_05", label: "Camber Bracket", sub: "UP" },
       { key: "HB_01", label: "Wheel Hub", sub: "HB" },
       { key: "HB_02", label: "Hub Lid", sub: "HB" },
       { key: "HB_07", label: "Ring Spacer", sub: "HB" },
@@ -1989,23 +2069,10 @@
     const refWeight = parseFloat(refRow["Weight (g)"]) || 0;
     const weightDiff = evalWeight - refWeight;
 
-    const isHB = partName === "HB_01";
-    const isUP = partName === "UP_01";
-    const partLcs = (isUP || isHB)
-      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-      : [];
-
-    const descMap = {
-      LC1: "Pure Braking",
-      LC2: "Pure Acceleration",
-      LC3: "Pure Cornering",
-      LC4: "Braking + Cornering 1",
-      LC5: "Braking + Cornering 2",
-      LC6: "Acceleration + Cornering 1",
-      LC7: "Acceleration + Cornering 2",
-      LC8: "1kN Fy",
-      LC9: "-1kN Fy"
-    };
+    const feaCfg = getPartFeaConfig(partName);
+    const partLcs = feaCfg ? feaCfg.lcs : [];
+    const descMap = feaCfg ? feaCfg.descMap : {};
+    const partStep = feaCfg ? feaCfg.step : "0.0001";
 
     const latest = iters[iters.length - 1];
     const nextVer = incrementVersion(latest.Version);
@@ -2408,7 +2475,7 @@
                       </td>
                       <td>
                         <div style="display: flex; align-items: center; gap: 0.6rem;">
-                          <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="newLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace; max-width: 145px;" placeholder="0.00000" value="${draftVal}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'new')">
+                          <input type="number" step="${partStep}" id="newLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace; max-width: 145px;" placeholder="0.00000" value="${draftVal}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'new')">
                           <span id="newDelta_${lc}" class="live-delta-pill"></span>
                         </div>
                       </td>
@@ -2546,7 +2613,7 @@
                       </td>
                       <td>
                         <div style="display: flex; align-items: center; gap: 0.6rem;">
-                          <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace; max-width: 145px;" value="${curVal}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'edit')">
+                          <input type="number" step="${partStep}" id="editLC_${lc}" class="form-input" style="padding: 0.35rem 0.6rem; font-family: monospace; max-width: 145px;" value="${curVal}" oninput="window.markUnsaved(true); window.updateLiveFormTelemetry('${partName}', 'edit')">
                           <span id="editDelta_${lc}" class="live-delta-pill"></span>
                         </div>
                       </td>
@@ -2783,11 +2850,8 @@
         const origBtnText = btnSaveNew.textContent;
         btnSaveNew.textContent = "Preparing...";
 
-        const isHB = partName === "HB_01";
-        const isUP = partName === "UP_01";
-        const partLcs = (isUP || isHB)
-          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-          : [];
+        const feaCfg = getPartFeaConfig(partName);
+        const partLcs = feaCfg ? feaCfg.lcs : [];
 
         const stiffObj = {};
         if (partLcs.length) {
@@ -2897,11 +2961,8 @@
         row.Description = desc;
         row.Specifications = specs;
 
-        const isHB = partName === "HB_01";
-        const isUP = partName === "UP_01";
-        const partLcs = (isUP || isHB)
-          ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-          : [];
+        const feaCfg = getPartFeaConfig(partName);
+        const partLcs = feaCfg ? feaCfg.lcs : [];
 
         if (partLcs.length) {
           const stiffObj = {};
@@ -3072,10 +3133,12 @@
       if (refRow["Stiffness Data"]) refStiff = JSON.parse(refRow["Stiffness Data"]);
     } catch (e) {}
 
+    const partName = evalRow["Part Name"];
+    const feaCfg = getPartFeaConfig(partName);
     let lcKeys = Object.keys(evalStiff).length ? Object.keys(evalStiff) : Object.keys(refStiff);
     if (!lcKeys.length) {
-      if (evalRow["Part Name"] === "HB_01" || evalRow["Part Name"] === "UP_01") {
-        lcKeys = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
+      if (feaCfg) {
+        lcKeys = feaCfg.lcs;
       } else {
         const fallbackMsg = `
           <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem;">FEA Displacements</h3>
@@ -3085,7 +3148,7 @@
       }
     }
 
-    const descMap = {
+    const descMap = feaCfg ? feaCfg.descMap : {
       LC1: "Pure Braking",
       LC2: "Pure Acceleration",
       LC3: "Pure Cornering",
@@ -3097,8 +3160,7 @@
       LC9: "-1kN Fy"
     };
 
-    const isHB = evalRow["Part Name"] === "HB_01";
-    const decimals = isHB ? 5 : 4;
+    const decimals = feaCfg ? feaCfg.decimals : 4;
 
     let rowsHtml = "";
     lcKeys.forEach((lc) => {
@@ -3161,9 +3223,10 @@
     const refLcMap = parseLcImages(refRow["LC Images"]);
     const partName = evalRow["Part Name"];
 
+    const feaCfg = getPartFeaConfig(partName);
     let allLcs = [];
-    if (partName === "UP_01" || partName === "HB_01") {
-      allLcs = ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"];
+    if (feaCfg) {
+      allLcs = feaCfg.lcs;
     } else {
       allLcs = Array.from(new Set([...Object.keys(evalLcMap), ...Object.keys(refLcMap)]));
     }
@@ -3520,11 +3583,9 @@
     const latest = iters[iters.length - 1] || {};
 
     const nextVer = incrementVersion(latest.Version || "1.0");
-    const isHB = partName === "HB_01";
-    const isUP = partName === "UP_01";
-    const partLcs = (isUP || isHB)
-      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-      : [];
+    const feaCfg = getPartFeaConfig(partName);
+    const partLcs = feaCfg ? feaCfg.lcs : [];
+    const partStep = feaCfg ? feaCfg.step : "0.0001";
 
     let latestStiff = {};
     try {
@@ -3541,7 +3602,7 @@
             return `
               <div class="form-group">
                 <label for="inputLC_${lc}">${lc} (mm)</label>
-                <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="inputLC_${lc}" class="form-input" value="${curVal}">
+                <input type="number" step="${partStep}" id="inputLC_${lc}" class="form-input" value="${curVal}">
               </div>
             `;
           }).join("")}
@@ -3665,11 +3726,9 @@
     const row = partsData.find((p) => p["Part Name"] === partName && String(p.Version) === String(version));
     if (!row) return;
 
-    const isHB = partName === "HB_01";
-    const isUP = partName === "UP_01";
-    const partLcs = (isUP || isHB)
-      ? ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"]
-      : [];
+    const feaCfg = getPartFeaConfig(partName);
+    const partLcs = feaCfg ? feaCfg.lcs : [];
+    const partStep = feaCfg ? feaCfg.step : "0.0001";
 
     let currentStiff = {};
     try {
@@ -3686,7 +3745,7 @@
             return `
               <div class="form-group">
                 <label for="editLC_${lc}">${lc} (mm)</label>
-                <input type="number" step="${isHB ? "0.00001" : "0.0001"}" id="editLC_${lc}" class="form-input" value="${curVal}">
+                <input type="number" step="${partStep}" id="editLC_${lc}" class="form-input" value="${curVal}">
               </div>
             `;
           }).join("")}
@@ -4372,6 +4431,7 @@
                 ${renderCustomPartPicker("UP_02", "Upright Lid")}
                 ${renderCustomPartPicker("UP_03", "Internal Front Plate")}
                 ${renderCustomPartPicker("UP_04", "Backplate")}
+                ${renderCustomPartPicker("UP_05", "Camber Bracket")}
               </div>
 
               <!-- Component Pickers: Hub (HB) -->
