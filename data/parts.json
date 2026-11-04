@@ -1020,5 +1020,19 @@
     "LC Images": null,
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_01",
+    "Version": "7.0.0",
+    "Date": "2026-11-04 14:59:26",
+    "Weight (g)": 1011.37,
+    "Description": "Upper and Tie Rod Changes\nUpper: base 10 ; Rib 23",
+    "Specifications": "",
+    "Image Path": "[\"images/UP_01_v7_0_0_20261104145926_sch1.png\",\"images/UP_01_v7_0_0_20261104145926_sch2.png\",\"images/UP_01_v7_0_0_20261104145926_sch3.png\"]",
+    "Stiffness Data": "{\"LC1\":0.1605,\"LC2\":0.2234,\"LC3\":0.2704,\"LC4\":0.1626,\"LC5\":0.1718,\"LC6\":0.2545,\"LC7\":0.2807,\"LC8\":0.061,\"LC9\":0.061}",
+    "LC Images": "{\"LC3\":\"images/UP_01_v7_0_0_LC3_20261104145926.png\",\"LC2\":\"images/UP_01_v7_0_0_LC2_20261104145926.png\",\"LC1\":\"images/UP_01_v7_0_0_LC1_20261104145926.png\",\"LC8\":\"images/UP_01_v7_0_0_LC8_20261104145926.png\",\"LC9\":\"images/UP_01_v7_0_0_LC9_20261104145926.png\",\"LC4\":\"images/UP_01_v7_0_0_LC4_20261104145926.png\",\"LC5\":\"images/UP_01_v7_0_0_LC5_20261104145926.png\",\"LC6\":\"images/UP_01_v7_0_0_LC6_20261104145926.png\",\"LC7\":\"images/UP_01_v7_0_0_LC7_20261104145926.png\"}",
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
