@@ -1006,5 +1006,19 @@
     "LC Images": null,
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "HB",
+    "Part Name": "HB_02",
+    "Version": "FST15",
+    "Date": "2026-11-04 01:18:38",
+    "Weight (g)": 93.21,
+    "Description": "To make the FST15 baseline",
+    "Specifications": "",
+    "Image Path": null,
+    "Stiffness Data": null,
+    "LC Images": null,
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
