@@ -1072,8 +1072,8 @@
     "Description": "Upper Support:\nRib, 15mm\nThickness, 8mm\nBase Fillet 5.5mm\nMinimal changes to the TieRod",
     "Specifications": "",
     "Image Path": "[\"images/UP_01_v7_0_3_20261104164108_sch1.png\",\"images/UP_01_v7_0_3_20261104164108_sch2.png\",\"images/UP_01_v7_0_3_20261104164108_sch3.png\"]",
-    "Stiffness Data": "{\"LC1\":0.1641,\"LC2\":0.1947,\"LC3\":0.2701,\"LC4\":0.1957,\"LC5\":0.1723,\"LC6\":0.2608,\"LC7\":0.2861,\"LC8\":0.0628,\"LC9\":0.0628}",
-    "LC Images": "{\"LC8\":\"images/UP_01_v7_0_3_LC8_20261104164108.png\",\"LC9\":\"images/UP_01_v7_0_3_LC9_20261104164108.png\",\"LC1\":\"images/UP_01_v7_0_3_LC1_20261104164108.png\",\"LC2\":\"images/UP_01_v7_0_3_LC2_20261104164108.png\",\"LC3\":\"images/UP_01_v7_0_3_LC3_20261104164108.png\",\"LC4\":\"images/UP_01_v7_0_3_LC4_20261104164108.png\",\"LC5\":\"images/UP_01_v7_0_3_LC5_20261104164108.png\",\"LC6\":\"images/UP_01_v7_0_3_LC6_20261104164108.png\",\"LC7\":\"images/UP_01_v7_0_3_LC7_20261104164108.png\"}",
+    "Stiffness Data": "{\"LC1\":0.1641,\"LC2\":0.2558,\"LC3\":0.2877,\"LC4\":0.1957,\"LC5\":0.1723,\"LC6\":0.2827,\"LC7\":0.3077,\"LC8\":0.0628,\"LC9\":0.0628}",
+    "LC Images": "{\"LC8\":\"images/UP_01_v7_0_3_LC8_20261104164108.png\",\"LC9\":\"images/UP_01_v7_0_3_LC9_20261104164108.png\",\"LC1\":\"images/UP_01_v7_0_3_LC1_20261104164108.png\",\"LC2\":\"images/UP_01_v7_0_3_LC2_20261104214732.png\",\"LC3\":\"images/UP_01_v7_0_3_LC3_20261104214732.png\",\"LC4\":\"images/UP_01_v7_0_3_LC4_20261104164108.png\",\"LC5\":\"images/UP_01_v7_0_3_LC5_20261104164108.png\",\"LC6\":\"images/UP_01_v7_0_3_LC6_20261104214732.png\",\"LC7\":\"images/UP_01_v7_0_3_LC7_20261104214732.png\"}",
     "Tolerancing Data": null,
     "Justification": null
   }
