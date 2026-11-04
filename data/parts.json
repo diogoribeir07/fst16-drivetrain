@@ -992,5 +992,19 @@
     "LC Images": "{\"LC1\":\"images/HB_01_v7_0_0_LC1_20261103202434.png\",\"LC2\":\"images/HB_01_v7_0_0_LC2_20261103202434.png\",\"LC3\":\"images/HB_01_v7_0_0_LC3_20261103202434.png\",\"LC4\":\"images/HB_01_v7_0_0_LC4_20261103202434.png\",\"LC5\":\"images/HB_01_v7_0_0_LC5_20261103202434.png\",\"LC6\":\"images/HB_01_v7_0_0_LC6_20261103202434.png\",\"LC7\":\"images/HB_01_v7_0_0_LC7_20261103202434.png\",\"LC9\":\"images/HB_01_v7_0_0_LC9_20261103202434.png\",\"LC8\":\"images/HB_01_v7_0_0_LC8_20261103202434.png\"}",
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "HB",
+    "Part Name": "HB_01",
+    "Version": "7.1.0",
+    "Date": "2026-11-04 01:02:54",
+    "Weight (g)": 487.3,
+    "Description": "Changed the BackRibs geometry to increase stiffness.\nSome minor changes to fillets",
+    "Specifications": "",
+    "Image Path": "[\"images/HB_01_v7_1_0_20261104010254_sch1.png\",\"images/HB_01_v7_1_0_20261104010254_sch2.png\",\"images/HB_01_v7_1_0_20261104010254_sch3.png\"]",
+    "Stiffness Data": "{\"LC1\":0.04345,\"LC2\":0.03397,\"LC3\":0.15387,\"LC4\":0.11224,\"LC5\":0.09243,\"LC6\":0.08043,\"LC7\":0.105,\"LC8\":0.03135,\"LC9\":0.03135}",
+    "LC Images": "{\"LC8\":\"images/HB_01_v7_1_0_LC8_20261104010254.png\",\"LC9\":\"images/HB_01_v7_1_0_LC9_20261104010254.png\",\"LC1\":\"images/HB_01_v7_1_0_LC1_20261104010254.png\",\"LC3\":\"images/HB_01_v7_1_0_LC3_20261104010254.png\",\"LC4\":\"images/HB_01_v7_1_0_LC4_20261104010254.png\",\"LC5\":\"images/HB_01_v7_1_0_LC5_20261104010254.png\",\"LC6\":\"images/HB_01_v7_1_0_LC6_20261104010254.png\",\"LC2\":\"images/HB_01_v7_1_0_LC2_20261104010254.png\",\"LC7\":\"images/HB_01_v7_1_0_LC7_20261104010254.png\"}",
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
