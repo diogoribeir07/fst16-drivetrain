@@ -1034,5 +1034,19 @@
     "LC Images": "{\"LC3\":\"images/UP_01_v7_0_0_LC3_20261104145926.png\",\"LC2\":\"images/UP_01_v7_0_0_LC2_20261104145926.png\",\"LC1\":\"images/UP_01_v7_0_0_LC1_20261104145926.png\",\"LC8\":\"images/UP_01_v7_0_0_LC8_20261104145926.png\",\"LC9\":\"images/UP_01_v7_0_0_LC9_20261104145926.png\",\"LC4\":\"images/UP_01_v7_0_0_LC4_20261104145926.png\",\"LC5\":\"images/UP_01_v7_0_0_LC5_20261104145926.png\",\"LC6\":\"images/UP_01_v7_0_0_LC6_20261104145926.png\",\"LC7\":\"images/UP_01_v7_0_0_LC7_20261104145926.png\"}",
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_01",
+    "Version": "7.0.1",
+    "Date": "2026-11-04 15:25:42",
+    "Weight (g)": 985.6,
+    "Description": "UpperRib 7(14)",
+    "Specifications": "",
+    "Image Path": "images/UP_01_v7_0_1_20261104152542_sch1.png",
+    "Stiffness Data": "{\"LC1\":0.162,\"LC2\":0.1899,\"LC3\":0.2709,\"LC4\":0.1954,\"LC5\":0.1719,\"LC6\":0.2586,\"LC7\":0.2845,\"LC8\":0.0617,\"LC9\":0.0617}",
+    "LC Images": "{\"LC1\":\"images/UP_01_v7_0_1_LC1_20261104152542.png\",\"LC2\":\"images/UP_01_v7_0_1_LC2_20261104152542.png\",\"LC3\":\"images/UP_01_v7_0_1_LC3_20261104152542.png\",\"LC8\":\"images/UP_01_v7_0_1_LC8_20261104152542.png\",\"LC9\":\"images/UP_01_v7_0_1_LC9_20261104152542.png\",\"LC4\":\"images/UP_01_v7_0_1_LC4_20261104152542.png\",\"LC5\":\"images/UP_01_v7_0_1_LC5_20261104152542.png\",\"LC6\":\"images/UP_01_v7_0_1_LC6_20261104152542.png\",\"LC7\":\"images/UP_01_v7_0_1_LC7_20261104152542.png\"}",
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
