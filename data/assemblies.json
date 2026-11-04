@@ -26,5 +26,12 @@
     "Total Weight (g)": 2270.05,
     "Description": "FST15 Baseline",
     "Part Configuration": "HB_01: vFST15\nUP_01: vFST15\nUP_02: vFST15\nUP_03: vFST15\nUP_05: vFST15\nInner Bearing: v61815\nOuter Bearing: v61815\nSeal: v85X100X9 HMSA10 V"
+  },
+  {
+    "Assembly Version": "FST15 Final",
+    "Date": "2026-11-04 01:12:06",
+    "Total Weight (g)": 0,
+    "Description": "The Baseline Comparison",
+    "Part Configuration": "UP_01: vFST15 (1 body)\nUP_02: vFST15\nUP_03: vFST15\nUP_04: vFST15\nUP_05: vFST15\nHB_01: vFST15\nInner Bearing: v61815\nOuter Bearing: v61816\nSeal: v95X110X9 HMSA10 V"
   }
 ]
