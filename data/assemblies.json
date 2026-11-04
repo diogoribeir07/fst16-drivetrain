@@ -11,6 +11,6 @@
     "Date": "2026-11-04 01:13:43",
     "Total Weight (g)": 0,
     "Description": "Configuration with the latest version components",
-    "Part Configuration": "UP_01: v6.1\nUP_04: vFST15\nUP_05: v7.0.3\nHB_01: v7.1.0\nHB_07: v1.0\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
+    "Part Configuration": "UP_01: v6.1\nUP_04: vFST15\nUP_05: v7.0.3\nHB_01: v7.1.0\nHB_02: v7\nHB_07: v1.0\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
   }
 ]
