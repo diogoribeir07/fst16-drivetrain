@@ -113,20 +113,6 @@
   },
   {
     "Subassembly": "HB",
-    "Part Name": "HB_02",
-    "Version": 1,
-    "Date": "2026-10-06 11:28:41",
-    "Weight (g)": 20,
-    "Description": null,
-    "Specifications": null,
-    "Image Path": null,
-    "Stiffness Data": null,
-    "LC Images": null,
-    "Tolerancing Data": null,
-    "Justification": null
-  },
-  {
-    "Subassembly": "HB",
     "Part Name": "HB_07",
     "Version": "1.0",
     "Date": "2026-10-06 18:44:16",
