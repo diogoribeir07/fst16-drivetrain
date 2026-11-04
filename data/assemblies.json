@@ -7,13 +7,6 @@
     "Part Configuration": "TD: v1.2\nHB_01: v1\nHB_07: v1.0\nUP_01: v1.1\nUP_02: v1\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
   },
   {
-    "Assembly Version": "2.0 (Without Support)",
-    "Date": "2026-10-13 20:49:23",
-    "Total Weight (g)": 648.28,
-    "Description": "This assembly has the objective of having a comparative analysis with the FST15 design with the same features, focusing in the new v2.0 transmission",
-    "Part Configuration": "TD: v2.0\nUP_01: v2.0 (without supports)\nUP_02: v2.0 (with all features)\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
-  },
-  {
     "Assembly Version": "FST15 Final",
     "Date": "2026-11-04 01:12:06",
     "Total Weight (g)": 0,
