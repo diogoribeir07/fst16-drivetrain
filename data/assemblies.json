@@ -1,12 +1,5 @@
 [
   {
-    "Assembly Version": "1.0",
-    "Date": "2026-10-12 22:02:36",
-    "Total Weight (g)": 1690.22,
-    "Description": "The first iteration for the new motors where the bearings sit right on top of the seal",
-    "Part Configuration": "TD: v1.2\nHB_01: v1\nHB_07: v1.0\nUP_01: v1.1\nUP_02: v1\nInner Bearing: v61816\nOuter Bearing: v61816\nSeal: v85X100X9 HMSA10 V"
-  },
-  {
     "Assembly Version": "FST15 Final",
     "Date": "2026-11-04 01:12:06",
     "Total Weight (g)": 0,
