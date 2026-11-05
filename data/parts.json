@@ -1090,5 +1090,19 @@
     "LC Images": "{\"LC1\":\"images/UP_01R_FST15_LC1_20261105095440.png\",\"LC2\":\"images/UP_01R_FST15_LC2_20261105095440.png\",\"LC3\":\"images/UP_01R_FST15_LC3_20261105095440.png\",\"LC4\":\"images/UP_01R_FST15_LC4_20261105100039.png\",\"LC5\":\"images/UP_01R_FST15_LC5_20261105100039.png\",\"LC6\":\"images/UP_01R_FST15_LC6_20261105100039.png\",\"LC7\":\"images/UP_01R_FST15_LC7_20261105100039.png\",\"LC9\":\"images/UP_01R_FST15_LC9_20261105095523.png\",\"LC8\":\"images/UP_01R_FST15_LC8_20261105095523.png\"}",
     "Tolerancing Data": null,
     "Justification": null
+  },
+  {
+    "Subassembly": "UP",
+    "Part Name": "UP_01R",
+    "Version": "8.0.0",
+    "Date": "2026-11-05 14:48:14",
+    "Weight (g)": 991.36,
+    "Description": "The first iteration with the supports similar to the front ones, but with the right coordinates",
+    "Specifications": "",
+    "Image Path": null,
+    "Stiffness Data": "{\"LC1\":0.1226,\"LC2\":0.2118,\"LC3\":0.293,\"LC4\":0.1444,\"LC5\":0.1488,\"LC6\":0.2857,\"LC7\":0.3047,\"LC8\":0.0644,\"LC9\":0.0644}",
+    "LC Images": "{\"LC3\":\"images/UP_01R_v8_0_0_LC3_20261105144814.png\",\"LC1\":\"images/UP_01R_v8_0_0_LC1_20261105144814.png\",\"LC2\":\"images/UP_01R_v8_0_0_LC2_20261105144814.png\",\"LC8\":\"images/UP_01R_v8_0_0_LC8_20261105144814.png\",\"LC9\":\"images/UP_01R_v8_0_0_LC9_20261105144814.png\",\"LC5\":\"images/UP_01R_v8_0_0_LC5_20261105144814.png\",\"LC6\":\"images/UP_01R_v8_0_0_LC6_20261105144814.png\",\"LC7\":\"images/UP_01R_v8_0_0_LC7_20261105144814.png\",\"LC4\":\"images/UP_01R_v8_0_0_LC4_20261105144814.png\"}",
+    "Tolerancing Data": null,
+    "Justification": null
   }
 ]
