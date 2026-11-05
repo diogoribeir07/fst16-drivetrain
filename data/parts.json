@@ -1086,8 +1086,8 @@
     "Description": "Upright Assembly Rear FST15 Baseline",
     "Specifications": "",
     "Image Path": "[\"images/UP_01R_FST15_20261105091532_sch1.png\",\"images/UP_01R_FST15_20261105091532_sch2.png\"]",
-    "Stiffness Data": "{\"LC1\":0.1165,\"LC2\":0.1714,\"LC3\":0.3528,\"LC4\":0.4214,\"LC5\":0.4229,\"LC6\":0.3262,\"LC7\":0.3574,\"LC8\":0,\"LC9\":0}",
-    "LC Images": "{\"LC1\":\"images/UP_01R_FST15_LC1_20261105095440.png\",\"LC2\":\"images/UP_01R_FST15_LC2_20261105095440.png\",\"LC3\":\"images/UP_01R_FST15_LC3_20261105095440.png\",\"LC4\":\"images/UP_01R_vFST15_LC4.png\",\"LC5\":\"images/UP_01R_vFST15_LC5.png\",\"LC6\":\"images/UP_01R_vFST15_LC6.png\",\"LC7\":\"images/UP_01R_vFST15_LC7.png\"}",
+    "Stiffness Data": "{\"LC1\":0.1165,\"LC2\":0.1714,\"LC3\":0.3528,\"LC4\":0.4214,\"LC5\":0.4229,\"LC6\":0.3262,\"LC7\":0.3574,\"LC8\":0.0761,\"LC9\":0.0761}",
+    "LC Images": "{\"LC1\":\"images/UP_01R_FST15_LC1_20261105095440.png\",\"LC2\":\"images/UP_01R_FST15_LC2_20261105095440.png\",\"LC3\":\"images/UP_01R_FST15_LC3_20261105095440.png\",\"LC4\":\"images/UP_01R_vFST15_LC4.png\",\"LC5\":\"images/UP_01R_vFST15_LC5.png\",\"LC6\":\"images/UP_01R_vFST15_LC6.png\",\"LC7\":\"images/UP_01R_vFST15_LC7.png\",\"LC9\":\"images/UP_01R_FST15_LC9_20261105095523.png\",\"LC8\":\"images/UP_01R_FST15_LC8_20261105095523.png\"}",
     "Tolerancing Data": null,
     "Justification": null
   }
