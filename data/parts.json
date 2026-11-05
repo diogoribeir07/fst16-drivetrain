@@ -1114,8 +1114,8 @@
     "Description": "Bigger and more connected bases of the lower support",
     "Specifications": "",
     "Image Path": "[\"images/UP_01R_v8_0_1_20261105153955_sch1.png\",\"images/UP_01R_v8_0_1_20261105153955_sch2.png\"]",
-    "Stiffness Data": "{\"LC1\":0,\"LC2\":0,\"LC3\":0,\"LC4\":0,\"LC5\":0,\"LC6\":0,\"LC7\":0,\"LC8\":0,\"LC9\":0}",
-    "LC Images": null,
+    "Stiffness Data": "{\"LC1\":0.103,\"LC2\":0.1818,\"LC3\":0.2809,\"LC4\":0.1726,\"LC5\":0.1494,\"LC6\":0.2665,\"LC7\":0.2863,\"LC8\":0.0607,\"LC9\":0.0607}",
+    "LC Images": "{\"LC1\":\"images/UP_01R_v8_0_1_LC1_20261105155921.png\",\"LC2\":\"images/UP_01R_v8_0_1_LC2_20261105155921.png\",\"LC3\":\"images/UP_01R_v8_0_1_LC3_20261105155921.png\",\"LC4\":\"images/UP_01R_v8_0_1_LC4_20261105155921.png\",\"LC5\":\"images/UP_01R_v8_0_1_LC5_20261105155921.png\",\"LC6\":\"images/UP_01R_v8_0_1_LC6_20261105155921.png\",\"LC7\":\"images/UP_01R_v8_0_1_LC7_20261105155921.png\",\"LC8\":\"images/UP_01R_v8_0_1_LC8_20261105155921.png\",\"LC9\":\"images/UP_01R_v8_0_1_LC9_20261105155921.png\"}",
     "Tolerancing Data": null,
     "Justification": null
   }
