@@ -212,7 +212,7 @@
         }
       };
     }
-    if (partName === "UP_01") {
+    if (partName === "UP_01" || partName === "UP_01R") {
       return {
         isFea: true,
         decimals: 4,
@@ -1331,6 +1331,7 @@
 
     const standardKeys = [
       { key: "UP_01", label: "Upright Body", sub: "UP" },
+      { key: "UP_01R", label: "Rear Upright Body", sub: "UP" },
       { key: "UP_02", label: "Upright Lid", sub: "UP" },
       { key: "UP_03", label: "Front Plate", sub: "UP" },
       { key: "UP_04", label: "Backplate", sub: "UP" },
@@ -4428,6 +4429,7 @@
                   Upright Assembly (UP)
                 </div>
                 ${renderCustomPartPicker("UP_01", "Main Upright Body")}
+                ${renderCustomPartPicker("UP_01R", "Rear Upright Body")}
                 ${renderCustomPartPicker("UP_02", "Upright Lid")}
                 ${renderCustomPartPicker("UP_03", "Internal Front Plate")}
                 ${renderCustomPartPicker("UP_04", "Backplate")}

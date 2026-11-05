@@ -456,6 +456,29 @@ FEA_PARTS_CONFIG = {
         "DEFAULT_FST16": {
             "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0, "LC5": 0.0, "LC6": 0.0
         }
+    },
+    "UP_01R": {
+        "DECIMALS": 4,
+        "LC_KEYS": ["LC1", "LC2", "LC3", "LC4", "LC5", "LC6", "LC7", "LC8", "LC9"],
+        "LC_INFO": {
+            "LC1": {"desc": "Pure Braking", "ref_fst15": 0.3447, "default_fst16": None},
+            "LC2": {"desc": "Pure Acceleration", "ref_fst15": 0.4246, "default_fst16": None},
+            "LC3": {"desc": "Pure Cornering", "ref_fst15": 0.3381, "default_fst16": None},
+            "LC4": {"desc": "Braking + Cornering 1", "ref_fst15": 0.4214, "default_fst16": None},
+            "LC5": {"desc": "Braking + Cornering 2", "ref_fst15": 0.4229, "default_fst16": None},
+            "LC6": {"desc": "Acceleration + Cornering 1", "ref_fst15": 0.3262, "default_fst16": None},
+            "LC7": {"desc": "Acceleration + Cornering 2", "ref_fst15": 0.3574, "default_fst16": None},
+            "LC8": {"desc": "1kN Fy", "ref_fst15": 0.0, "default_fst16": None},
+            "LC9": {"desc": "-1kN Fy", "ref_fst15": 0.0, "default_fst16": None},
+        },
+        "DEFAULT_FST15": {
+            "LC1": 0.3447, "LC2": 0.4246, "LC3": 0.3381, "LC4": 0.4214,
+            "LC5": 0.4229, "LC6": 0.3262, "LC7": 0.3574, "LC8": 0.0, "LC9": 0.0
+        },
+        "DEFAULT_FST16": {
+            "LC1": 0.0, "LC2": 0.0, "LC3": 0.0, "LC4": 0.0,
+            "LC5": 0.0, "LC6": 0.0, "LC7": 0.0, "LC8": 0.0, "LC9": 0.0
+        }
     }
 }
 
@@ -1667,7 +1690,7 @@ elif st.session_state.current_page == "Part Management":
             latest_iter = part_data.iloc[-1]
             subassembly = latest_iter['Subassembly']
             is_oem = (subassembly == "Other") or (str(selected_part) in ["61815", "61816", "71815-TN", "71816-TN", "85X100X9 HMSA10 V", "95X110X9 HMSA10 V"])
-            is_structural = (str(selected_part) in ["UP_01", "UP_02", "UpperSupport Version", "HB_01", "UP_05"])
+            is_structural = (str(selected_part) in ["UP_01", "UP_02", "UpperSupport Version", "HB_01", "UP_05", "UP_01R"])
 
             if f"pending_eval_{selected_part}" in st.session_state:
                 st.session_state[f"comp_eval_{selected_part}"] = st.session_state.pop(f"pending_eval_{selected_part}")
