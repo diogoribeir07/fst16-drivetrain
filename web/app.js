@@ -281,15 +281,18 @@
           // Draw cropped & scaled region
           ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
 
-          // Invert & enhance contrast to optimize for OCR (matches Python ImageOps.invert)
+          // Invert & suppress nTop input box borders (gray < 115 -> white 255)
           const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const d = imgData.data;
           for (let i = 0; i < d.length; i += 4) {
             const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-            // Invert: dark background with bright text -> light background with dark text
-            const inv = 255 - gray;
-            const contrast = (inv - 128) * 1.6 + 128;
-            const finalVal = Math.min(255, Math.max(0, contrast));
+            let finalVal;
+            if (gray < 115) {
+              finalVal = 255;
+            } else {
+              const inv = 255 - gray;
+              finalVal = Math.min(255, Math.max(0, (inv - 128) * 2.0 + 100));
+            }
             d[i] = finalVal;
             d[i + 1] = finalVal;
             d[i + 2] = finalVal;
@@ -453,30 +456,93 @@
 
           // Extract scientific notation or decimal displacement numbers
           const nums = [];
-          const sciRegex = /([1-9])[.\-]?(\d{3,5})\s*(?:e\s*[\-+]|[\+&]|\s*-\s*)0([0-4])/gi;
+          const sciRegex = /([1-9Il|!])[.,\-]?(\d{3,5})\s*(?:e\s*[\-+]|[\+&]|\s*-\s*)[0Oo]([0-4Il|])/gi;
           let match;
           while ((match = sciRegex.exec(cleanText)) !== null) {
-            const mant = parseFloat(match[1] + "." + match[2]);
-            const exp = parseInt(match[3], 10);
-            nums.push(mant * Math.pow(10, -exp));
+            const leadDig = /[Il|!]/.test(match[1]) ? "1" : match[1];
+            const expDig = /[Il|]/.test(match[3]) ? "1" : match[3];
+            const mant = parseFloat(leadDig + "." + match[2]);
+            const exp = parseInt(expDig, 10);
+            const val = mant * Math.pow(10, -exp);
+            if (val > 1e-7 && val < 100) {
+              nums.push(val);
+            }
           }
 
           if (!nums.length) {
             const decRegex = /\b0\.(\d{3,5})\b/g;
             while ((match = decRegex.exec(cleanText)) !== null) {
-              nums.push(parseFloat(match[0]));
+              const val = parseFloat(match[0]);
+              if (val > 1e-7) nums.push(val);
             }
           }
+
+          // Reconstruct true 6/6 colorbar maximum using nTop's 6-interval linear scale law
+          function resolveNtopColorbarMax(extractedNums) {
+            if (!extractedNums || !extractedNums.length) return null;
+            const unique = [];
+            extractedNums.forEach((v) => {
+              if (!unique.some((u) => Math.abs(u - v) / Math.max(u, v) < 1e-4)) {
+                unique.push(v);
+              }
+            });
+            unique.sort((a, b) => b - a);
+            if (unique.length === 1) return unique[0];
+
+            // Compute candidate unit steps from consecutive differences
+            const diffs = [];
+            for (let i = 0; i < unique.length - 1; i++) {
+              const dStep = unique[i] - unique[i + 1];
+              if (dStep > 1e-7) diffs.push(dStep);
+            }
+            // Find consensus unit step
+            let bestStep = null;
+            let bestScore = 0;
+            const candidates = [...diffs, unique[unique.length - 1]];
+            for (const cand of candidates) {
+              const matchedTicks = unique.filter((v) => {
+                const k = Math.round(v / cand);
+                return k >= 1 && k <= 6 && Math.abs(v / cand - k) < 0.04;
+              });
+              if (matchedTicks.length > bestScore || (matchedTicks.length === bestScore && bestStep && cand < bestStep)) {
+                bestScore = matchedTicks.length;
+                bestStep = cand;
+              }
+            }
+
+            if (bestStep && bestScore >= 3) {
+              let sumStep = 0;
+              let countStep = 0;
+              let tick6Direct = null;
+              for (const v of unique) {
+                const k = Math.round(v / bestStep);
+                if (k >= 1 && k <= 6 && Math.abs(v / bestStep - k) < 0.04) {
+                  sumStep += v / k;
+                  countStep++;
+                  if (k === 6 && tick6Direct === null) {
+                    tick6Direct = v;
+                  }
+                }
+              }
+              if (tick6Direct !== null) {
+                return tick6Direct;
+              }
+              if (countStep > 0) {
+                return 6 * (sumStep / countStep);
+              }
+            }
+            return unique[0];
+          }
+
           let detectedDisp = null;
           const feaCfg = getPartFeaConfig(targetPart);
           const partDecimals = feaCfg ? feaCfg.decimals : 4;
 
           if (nums.length) {
-            const rawMax = nums[0]; // Top value of legend scale is peak displacement
+            const rawMax = resolveNtopColorbarMax(nums);
             const factor = Math.pow(10, partDecimals);
-            detectedDisp = Math.floor(rawMax * factor + 1e-9) / factor;
+            detectedDisp = Math.round(rawMax * factor) / factor;
           }
-
           // Full image as compressed data URL for saving as LC contour
           const fullCanvas = document.createElement("canvas");
           const maxDim = 1200;

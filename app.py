@@ -139,17 +139,49 @@ def extract_ntop_fea_from_image(pil_img, target_part=None):
                 detected_lc = "LC8"
 
         nums = []
-        for m in re.finditer(r"([1-9])[.\-]?(\d{5})\s*(?:e\s*[\-+]|[\+&])\s*0([0-4])", text, re.I):
-            mant = float(m.group(1) + "." + m.group(2))
-            exp = int(m.group(3))
-            nums.append(mant * (10 ** (-exp)))
+        for m in re.finditer(r"([1-9Il|!])[.,\-]?(\d{3,5})\s*(?:e\s*[\-+]|[\+&]|\s*-\s*)[0Oo]([0-4Il|])", text, re.I):
+            lead_d = "1" if m.group(1) in "Il|!" else m.group(1)
+            exp_d = "1" if m.group(3) in "Il|" else m.group(3)
+            mant = float(lead_d + "." + m.group(2))
+            exp = int(exp_d)
+            val = mant * (10 ** (-exp))
+            if 1e-7 < val < 100:
+                nums.append(val)
 
         detected_disp = None
         if nums:
-            raw_max = nums[0]
+            unique = []
+            for v in nums:
+                if not any(abs(u - v) / max(u, v) < 1e-4 for u in unique):
+                    unique.append(v)
+            unique.sort(reverse=True)
+            raw_max = unique[0]
+            if len(unique) >= 3:
+                diffs = [unique[i] - unique[i + 1] for i in range(len(unique) - 1) if unique[i] - unique[i + 1] > 1e-7]
+                candidates = diffs + [unique[-1]]
+                best_step, best_score = None, 0
+                for cand in candidates:
+                    matched = [v for v in unique if 1 <= round(v / cand) <= 6 and abs(v / cand - round(v / cand)) < 0.04]
+                    if len(matched) > best_score:
+                        best_score = len(matched)
+                        best_step = cand
+                if best_step and best_score >= 3:
+                    step_estimates = []
+                    tick6_val = None
+                    for v in unique:
+                        k = round(v / best_step)
+                        if 1 <= k <= 6 and abs(v / best_step - k) < 0.04:
+                            step_estimates.append(v / k)
+                            if k == 6 and tick6_val is None:
+                                tick6_val = v
+                    if tick6_val is not None:
+                        raw_max = tick6_val
+                    elif step_estimates:
+                        raw_max = 6.0 * (sum(step_estimates) / len(step_estimates))
+
             part_decimals = 5 if target_part in ["HB_01", "UP_05"] else 4
             factor = 10 ** part_decimals
-            detected_disp = math.floor(raw_max * factor + 1e-9) / factor
+            detected_disp = round(raw_max * factor) / factor
 
         return detected_lc, detected_disp
     except Exception:
