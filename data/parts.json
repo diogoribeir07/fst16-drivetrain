@@ -1128,8 +1128,8 @@
     "Description": "Reduced the fillets of the lower supports due to the 8.0.1 they were massive",
     "Specifications": "",
     "Image Path": "[\"images/UP_01R_v8_0_2_20261106085430_sch1.png\",\"images/UP_01R_v8_0_2_20261106085430_sch2.png\",\"images/UP_01R_v8_0_2_20261106085430_sch3.png\"]",
-    "Stiffness Data": "{\"LC1\":0.1108,\"LC2\":0.1942,\"LC3\":0.2869,\"LC4\":0,\"LC5\":0,\"LC6\":0,\"LC7\":0,\"LC8\":0.0628,\"LC9\":0.0628}",
-    "LC Images": "{\"LC1\":\"images/UP_01R_v8_0_2_LC1_20261106085430.png\",\"LC2\":\"images/UP_01R_v8_0_2_LC2_20261106085430.png\",\"LC3\":\"images/UP_01R_v8_0_2_LC3_20261106085430.png\",\"LC8\":\"images/UP_01R_v8_0_2_LC8_20261106085430.png\",\"LC9\":\"images/UP_01R_v8_0_2_LC9_20261106085430.png\"}",
+    "Stiffness Data": "{\"LC1\":0.1108,\"LC2\":0.1942,\"LC3\":0.2869,\"LC4\":0.1733,\"LC5\":0.1493,\"LC6\":0.2743,\"LC7\":0.2939,\"LC8\":0.0628,\"LC9\":0.0628}",
+    "LC Images": "{\"LC1\":\"images/UP_01R_v8_0_2_LC1_20261106085430.png\",\"LC2\":\"images/UP_01R_v8_0_2_LC2_20261106085430.png\",\"LC3\":\"images/UP_01R_v8_0_2_LC3_20261106085430.png\",\"LC8\":\"images/UP_01R_v8_0_2_LC8_20261106085430.png\",\"LC9\":\"images/UP_01R_v8_0_2_LC9_20261106085430.png\",\"LC4\":\"images/UP_01R_v8_0_2_LC4_20261106090204.png\",\"LC5\":\"images/UP_01R_v8_0_2_LC5_20261106090204.png\",\"LC6\":\"images/UP_01R_v8_0_2_LC6_20261106090204.png\",\"LC7\":\"images/UP_01R_v8_0_2_LC7_20261106090204.png\"}",
     "Tolerancing Data": null,
     "Justification": null
   }
